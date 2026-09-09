@@ -182,7 +182,7 @@
           <span><span class="kbd">⌘Z</span> undo · <span class="kbd">⇧⌘Z</span> redo</span>
           <span><span class="kbd">/</span> search</span>
           <span><span class="kbd">esc</span> back / deselect</span>
-          <span><span class="kbd">⇧</span>+drag near a card to group · <span class="kbd">⌥</span>+drag a grouped card alone</span>
+          <span><span class="kbd">⇧</span>+drag near a card to group · hold <span class="kbd">⇧</span> before grabbing a grouped card to move it alone</span>
           <span>type anywhere to start a new todo</span>
         </div>
       </section>

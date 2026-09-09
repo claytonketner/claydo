@@ -149,13 +149,16 @@
     store.focus(card.id);
   }
 
+  /** ⇧ must already be down when the card is grabbed to pull it out of its group alone. */
+  let shiftAtGrab = false;
+
   const dragOpts = $derived({
     enabled: () => !editing,
     ignore: 'input, textarea, button, a',
-    onStart: (e: PointerEvent) => {
+    onStart: () => {
       store.selectedId = card.id;
       store.editingId = null;
-      beginDrag(card.id, node, { alone: e.altKey });
+      beginDrag(card.id, node, { alone: shiftAtGrab });
       return true;
     },
     onMove: (_pos: { x: number; y: number }, e: PointerEvent) => trackDrag(e, node),
@@ -190,6 +193,7 @@
   style:top={layout === 'free' ? `${top}px` : undefined}
   style:--paper-custom={card.color ?? undefined}
   data-card={popup ? undefined : card.id}
+  onpointerdown={(e) => (shiftAtGrab = e.shiftKey)}
   ondblclick={onDblClick}
   onpointerenter={() => (ui.hoveredId = card.id)}
   onpointerleave={() => (ui.hoveredId = ui.hoveredId === card.id ? null : ui.hoveredId)}

@@ -58,7 +58,7 @@ to another while holding **⇧** and they group: a **GROUP** label and a hull
 appear (without ⇧ you get a faded hint). Overlap most of a card and it turns
 into **NEST**. Drop a todo on a person and it joins their agenda. Grouped
 cards share a dashed hull with an ✕ to ungroup, and dragging any member moves
-the whole group; hold ⌥ to drag one card out on its own.
+the whole group. To pull one card out on its own, hold ⇧ before you grab it.
 
 **Sub-todos.** A card with sub-todos shows little tabs along its bottom edge,
 one per child. Press `F` or double-click to open its popup.
