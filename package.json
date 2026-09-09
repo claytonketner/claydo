@@ -1,0 +1,29 @@
+{
+  "name": "claydo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A spatial, sticky-note style TODO board with hierarchy, capacity meters, and a bit of physics.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/node": "^22.20.2",
+    "svelte": "^5.57.0",
+    "svelte-check": "^4.7.6",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.2",
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^5.0.0"
+  },
+  "dependencies": {
+    "idb-keyval": "^6.3.0"
+  }
+}

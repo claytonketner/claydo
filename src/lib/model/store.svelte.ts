@@ -1,0 +1,478 @@
+import { bucketLoad, buildCapacityIndex, effectiveBucketId, type BucketLoad } from './capacity';
+import { History } from './history';
+import { nid } from './ids';
+import { parseQuickAdd } from './parse';
+import { emptyDoc, newCard, seedDoc } from './seed';
+import { CARD_H, CARD_W, type Bucket, type Card, type Doc, type Effort, type Id, type Value, type ViewMode } from './types';
+import { loadDoc, saveDailySnapshot, saveDoc } from '../persist/db';
+import { downloadJson, mergeDocs } from '../persist/backup';
+
+const SAVE_DEBOUNCE_MS = 300;
+
+export class Store {
+  doc = $state<Doc>(emptyDoc());
+  loaded = $state(false);
+
+  // UI state
+  selectedId = $state<Id | null>(null);
+  editingId = $state<Id | null>(null);
+  view = $state<ViewMode>('bucket');
+  focusStack = $state<Id[]>([]);
+  search = $state('');
+  settingsOpen = $state(false);
+  reflectOpen = $state(false);
+  toast = $state<{ id: number; text: string; undo?: () => void } | null>(null);
+  dirty = $state(false);
+  lastCompletedId = $state<Id | null>(null);
+
+  private history = new History<Doc>(100);
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
+  private toastSeq = 0;
+
+  // ---------- derived indexes ----------
+  byId = $derived(new Map(this.doc.cards.map((c) => [c.id, c])));
+  children = $derived.by(() => {
+    const m = new Map<Id, Card[]>();
+    for (const c of this.doc.cards) {
+      if (!c.parentId) continue;
+      const arr = m.get(c.parentId) ?? [];
+      arr.push(c);
+      m.set(c.parentId, arr);
+    }
+    return m;
+  });
+  capIdx = $derived(buildCapacityIndex(this.doc.cards, this.doc.settings.defaultEffortPoints));
+  people = $derived(this.doc.cards.filter((c) => c.kind === 'person' && c.doneAt == null).sort((a, b) => a.title.localeCompare(b.title)));
+  openCards = $derived(this.doc.cards.filter((c) => c.doneAt == null));
+  doneCards = $derived(this.doc.cards.filter((c) => c.doneAt != null).sort((a, b) => b.doneAt! - a.doneAt!));
+  tags = $derived([...new Set(this.doc.cards.flatMap((c) => c.tags))].sort());
+  buckets = $derived([...this.doc.buckets].sort((a, b) => a.order - b.order));
+  timeBuckets = $derived(this.buckets.filter((b) => b.kind === 'time'));
+  loads = $derived.by(() => {
+    const m = new Map<Id, BucketLoad>();
+    for (const b of this.buckets) m.set(b.id, bucketLoad(b, this.doc.cards, this.capIdx));
+    return m;
+  });
+  focusedId = $derived(this.focusStack.at(-1) ?? null);
+  focused = $derived(this.focusedId ? (this.byId.get(this.focusedId) ?? null) : null);
+  selected = $derived(this.selectedId ? (this.byId.get(this.selectedId) ?? null) : null);
+  canUndo = $derived.by(() => {
+    void this.doc;
+    return this.history.canUndo;
+  });
+  canRedo = $derived.by(() => {
+    void this.doc;
+    return this.history.canRedo;
+  });
+
+  // ---------- lifecycle ----------
+  async init(): Promise<void> {
+    const existing = await loadDoc();
+    this.doc = existing ?? seedDoc();
+    this.loaded = true;
+    if (existing) void saveDailySnapshot($state.snapshot(this.doc));
+    else this.scheduleSave();
+    this.maybeAutoBackup();
+  }
+
+  /** Flush pending save immediately (for pagehide). */
+  async flush(): Promise<void> {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    if (this.dirty) {
+      await saveDoc($state.snapshot(this.doc));
+      this.dirty = false;
+    }
+  }
+
+  private scheduleSave(): void {
+    this.dirty = true;
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      void saveDoc($state.snapshot(this.doc)).then(() => (this.dirty = false));
+    }, SAVE_DEBOUNCE_MS);
+  }
+
+  private maybeAutoBackup(): void {
+    const s = this.doc.settings;
+    if (!s.autoBackup) return;
+    const DAY = 86_400_000;
+    if (s.lastBackupAt && Date.now() - s.lastBackupAt < DAY) return;
+    downloadJson($state.snapshot(this.doc));
+    s.lastBackupAt = Date.now();
+    this.scheduleSave();
+  }
+
+  /** Wrap a mutation in an undo checkpoint and a save. */
+  commit(label: string, fn: () => void): void {
+    this.history.record($state.snapshot(this.doc) as Doc, label);
+    fn();
+    this.scheduleSave();
+  }
+
+  undo(): void {
+    const prev = this.history.undo($state.snapshot(this.doc) as Doc);
+    if (!prev) return;
+    this.doc = prev;
+    this.scheduleSave();
+    this.showToast('Undone');
+  }
+
+  redo(): void {
+    const next = this.history.redo($state.snapshot(this.doc) as Doc);
+    if (!next) return;
+    this.doc = next;
+    this.scheduleSave();
+    this.showToast('Redone');
+  }
+
+  showToast(text: string, undo?: () => void, ms = 2600): void {
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    this.toast = { id: ++this.toastSeq, text, undo };
+    this.toastTimer = setTimeout(() => (this.toast = null), ms);
+  }
+
+  // ---------- queries ----------
+  card(id: Id | null | undefined): Card | null {
+    return id ? (this.byId.get(id) ?? null) : null;
+  }
+  childrenOf(id: Id): Card[] {
+    return this.children.get(id) ?? [];
+  }
+  openChildrenOf(id: Id): Card[] {
+    return this.childrenOf(id).filter((c) => c.doneAt == null);
+  }
+  bucketOf(card: Card): Bucket | null {
+    const bid = effectiveBucketId(card, this.byId);
+    return bid ? (this.doc.buckets.find((b) => b.id === bid) ?? null) : null;
+  }
+  /** Cards that show on a bucket tray in the default view: explicit bucket, not done. */
+  cardsInBucket(bucketId: Id): Card[] {
+    return this.openCards.filter((c) => c.bucketId === bucketId);
+  }
+  /** Cards elsewhere on the board that reference this person. */
+  mentionsOf(personId: Id): Card[] {
+    return this.openCards.filter((c) => c.peopleIds.includes(personId) && c.parentId !== personId);
+  }
+  isDescendant(id: Id, ancestorId: Id): boolean {
+    let cur = this.byId.get(id);
+    const seen = new Set<Id>();
+    while (cur?.parentId) {
+      if (cur.parentId === ancestorId) return true;
+      if (seen.has(cur.id)) return false;
+      seen.add(cur.id);
+      cur = this.byId.get(cur.parentId);
+    }
+    return false;
+  }
+  get defaultBucketId(): Id {
+    const s = this.doc.settings;
+    const ok = (id: Id | null) => !!id && this.doc.buckets.some((b) => b.id === id && b.kind === 'time');
+    if (ok(s.lastDropBucketId)) return s.lastDropBucketId!;
+    if (ok(s.defaultBucketId)) return s.defaultBucketId!;
+    return this.timeBuckets[0]?.id ?? this.doc.buckets[0].id;
+  }
+
+  /** First grid cell in a tray not overlapping an existing card. */
+  freeSpot(bucketId: Id, excludeId?: Id): { x: number; y: number } {
+    const others = this.cardsInBucket(bucketId).filter((c) => c.id !== excludeId);
+    const gx = CARD_W + 14;
+    const gy = CARD_H + 14;
+    for (let row = 0; row < 40; row++) {
+      for (let col = 0; col < 6; col++) {
+        const x = 16 + col * gx;
+        const y = 16 + row * gy;
+        const clash = others.some((o) => Math.abs(o.pos.x - x) < CARD_W * 0.6 && Math.abs(o.pos.y - y) < CARD_H * 0.6);
+        if (!clash) return { x, y };
+      }
+    }
+    return { x: 16, y: 16 };
+  }
+
+  // ---------- mutations ----------
+  addCard(input: Partial<Card> & { title: string }, opts: { select?: boolean; edit?: boolean } = {}): Card {
+    const card = newCard(input);
+    if (!card.parentId && !card.bucketId) card.bucketId = this.defaultBucketId;
+    if (card.bucketId && input.pos === undefined) card.pos = this.freeSpot(card.bucketId);
+    this.commit('add card', () => this.doc.cards.push(card));
+    if (opts.select !== false) this.selectedId = card.id;
+    if (opts.edit) this.editingId = card.id;
+    return card;
+  }
+
+  updateCard(id: Id, patch: Partial<Card>, opts: { touch?: boolean; label?: string } = {}): void {
+    const c = this.byId.get(id);
+    if (!c) return;
+    this.commit(opts.label ?? 'edit card', () => {
+      Object.assign(c, patch);
+      c.updatedAt = Date.now();
+      if (opts.touch !== false) c.touchedAt = c.updatedAt;
+    });
+  }
+
+  /** Position change only (no history entry, dragging is noisy). Call `touch` on drop end. */
+  setPos(id: Id, pos: { x: number; y: number }): void {
+    const c = this.byId.get(id);
+    if (!c) return;
+    c.pos = { x: Math.max(0, Math.round(pos.x)), y: Math.max(0, Math.round(pos.y)) };
+    c.touchedAt = Date.now();
+    this.scheduleSave();
+  }
+
+  moveToBucket(id: Id, bucketId: Id, pos?: { x: number; y: number }): void {
+    const c = this.byId.get(id);
+    if (!c) return;
+    const bucket = this.doc.buckets.find((b) => b.id === bucketId);
+    if (!bucket) return;
+    this.commit('move card', () => {
+      c.bucketId = bucketId;
+      c.pos = pos ?? this.freeSpot(bucketId, id);
+      c.touchedAt = c.updatedAt = Date.now();
+      if (bucket.kind === 'time') this.doc.settings.lastDropBucketId = bucketId;
+      if (bucket.kind === 'people' && c.kind === 'todo') c.kind = 'person';
+      if (bucket.kind === 'ideas' && c.kind === 'todo') c.kind = 'idea';
+      if (bucket.kind === 'time' && c.kind === 'idea') c.kind = 'todo';
+    });
+  }
+
+  nest(childId: Id, parentId: Id): boolean {
+    if (childId === parentId) return false;
+    const child = this.byId.get(childId);
+    const parent = this.byId.get(parentId);
+    if (!child || !parent || child.kind === 'person') return false;
+    if (this.isDescendant(parentId, childId)) return false;
+    this.commit('nest card', () => {
+      child.parentId = parentId;
+      child.bucketId = null;
+      child.touchedAt = child.updatedAt = Date.now();
+      parent.touchedAt = Date.now();
+    });
+    return true;
+  }
+
+  unnest(id: Id, bucketId?: Id): void {
+    const c = this.byId.get(id);
+    if (!c || !c.parentId) return;
+    const target = bucketId ?? effectiveBucketId(c, this.byId) ?? this.defaultBucketId;
+    this.commit('un-nest card', () => {
+      c.parentId = null;
+      c.bucketId = target;
+      c.pos = this.freeSpot(target, id);
+      c.touchedAt = c.updatedAt = Date.now();
+    });
+  }
+
+  complete(id: Id): void {
+    const c = this.byId.get(id);
+    if (!c || c.kind === 'person') return;
+    const now = Date.now();
+    this.commit('complete', () => {
+      c.doneAt = now;
+      c.updatedAt = now;
+    });
+    this.lastCompletedId = id;
+    if (this.selectedId === id) this.selectedId = null;
+    this.showToast(`Done: ${c.title || 'untitled'}`, () => this.reopen(id));
+  }
+
+  reopen(id: Id): void {
+    const c = this.byId.get(id);
+    if (!c) return;
+    this.commit('reopen', () => {
+      c.doneAt = null;
+      c.touchedAt = c.updatedAt = Date.now();
+      if (!c.parentId && !c.bucketId) c.bucketId = this.defaultBucketId;
+    });
+  }
+
+  deleteCard(id: Id): void {
+    const c = this.byId.get(id);
+    if (!c) return;
+    const doomed = new Set<Id>([id]);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const x of this.doc.cards) {
+        if (x.parentId && doomed.has(x.parentId) && !doomed.has(x.id)) {
+          doomed.add(x.id);
+          grew = true;
+        }
+      }
+    }
+    const title = c.title;
+    this.commit('delete', () => {
+      this.doc.cards = this.doc.cards.filter((x) => !doomed.has(x.id));
+      for (const x of this.doc.cards) {
+        x.peopleIds = x.peopleIds.filter((p) => !doomed.has(p));
+        x.linkIds = x.linkIds.filter((l) => !doomed.has(l));
+      }
+    });
+    if (this.selectedId && doomed.has(this.selectedId)) this.selectedId = null;
+    if (this.editingId && doomed.has(this.editingId)) this.editingId = null;
+    this.focusStack = this.focusStack.filter((f) => !doomed.has(f));
+    const n = doomed.size;
+    this.showToast(`Deleted ${n > 1 ? `${n} cards` : title || 'card'}`, () => this.undo());
+  }
+
+  duplicate(id: Id): Card | null {
+    const c = this.byId.get(id);
+    if (!c) return null;
+    const copy = newCard({
+      ...($state.snapshot(c) as Card),
+      id: nid(),
+      title: c.title,
+      doneAt: null,
+      pos: { x: c.pos.x + 24, y: c.pos.y + 24 }
+    });
+    const now = Date.now();
+    copy.createdAt = copy.updatedAt = copy.touchedAt = now;
+    this.commit('duplicate', () => this.doc.cards.push(copy));
+    this.selectedId = copy.id;
+    return copy;
+  }
+
+  setEffort(id: Id, effort: Effort | null): void {
+    const c = this.byId.get(id);
+    if (!c) return;
+    this.updateCard(id, { effort: c.effort === effort ? null : effort }, { label: 'set effort' });
+  }
+  setValue(id: Id, value: Value | null): void {
+    const c = this.byId.get(id);
+    if (!c) return;
+    this.updateCard(id, { value: c.value === value ? null : value }, { label: 'set value' });
+  }
+
+  addPerson(name: string): Card {
+    const bucket = this.doc.buckets.find((b) => b.kind === 'people');
+    return this.addCard({ title: name.trim(), kind: 'person', bucketId: bucket?.id ?? this.defaultBucketId }, { select: false });
+  }
+  ensurePeople(names: string[]): Id[] {
+    return names.map((n) => {
+      const hit = this.people.find((p) => p.title.toLowerCase() === n.toLowerCase());
+      return hit ? hit.id : this.addPerson(n).id;
+    });
+  }
+
+  togglePerson(cardId: Id, personId: Id): void {
+    const c = this.byId.get(cardId);
+    if (!c) return;
+    const has = c.peopleIds.includes(personId);
+    this.updateCard(cardId, { peopleIds: has ? c.peopleIds.filter((p) => p !== personId) : [...c.peopleIds, personId] }, { label: 'link person' });
+  }
+
+  toggleLink(a: Id, b: Id): void {
+    const ca = this.byId.get(a);
+    const cb = this.byId.get(b);
+    if (!ca || !cb || a === b) return;
+    const has = ca.linkIds.includes(b);
+    this.commit(has ? 'unlink' : 'link', () => {
+      ca.linkIds = has ? ca.linkIds.filter((x) => x !== b) : [...ca.linkIds, b];
+      cb.linkIds = has ? cb.linkIds.filter((x) => x !== a) : [...cb.linkIds, a];
+      ca.updatedAt = cb.updatedAt = Date.now();
+    });
+  }
+
+  /**
+   * Quick-add: parse tokens, create people as needed, and add the card. When
+   * `parentId` is given (focus mode / person agenda) the card nests there.
+   */
+  quickAdd(text: string, opts: { parentId?: Id | null; bucketId?: Id | null } = {}): Card | null {
+    const parsed = parseQuickAdd(text, {
+      people: this.people.map((p) => ({ id: p.id, name: p.title })),
+      buckets: this.doc.buckets.filter((b) => b.kind !== 'done').map((b) => ({ id: b.id, name: b.name }))
+    });
+    if (!parsed.title && !parsed.notes) return null;
+    const peopleIds = [...parsed.peopleIds, ...this.ensurePeople(parsed.newPeople)];
+    let parentId = opts.parentId ?? null;
+    if (parsed.asChild && this.selectedId && this.selectedId !== parentId) parentId = this.selectedId;
+    const bucketId = parsed.bucketId ?? (parentId ? null : (opts.bucketId ?? this.defaultBucketId));
+    const bucket = bucketId ? this.doc.buckets.find((b) => b.id === bucketId) : null;
+    const kind = bucket?.kind === 'people' ? 'person' : bucket?.kind === 'ideas' ? 'idea' : 'todo';
+    return this.addCard(
+      {
+        title: parsed.title || parsed.notes.slice(0, 60),
+        notes: parsed.title ? parsed.notes : '',
+        kind,
+        parentId,
+        bucketId,
+        effort: parsed.effort,
+        value: parsed.value,
+        tags: parsed.tags,
+        peopleIds
+      },
+      { select: !parentId }
+    );
+  }
+
+  // ---------- buckets & settings ----------
+  updateBucket(id: Id, patch: Partial<Bucket>): void {
+    const b = this.doc.buckets.find((x) => x.id === id);
+    if (!b) return;
+    this.commit('edit bucket', () => Object.assign(b, patch));
+  }
+  addTimeBucket(name: string): void {
+    const order = Math.max(...this.timeBuckets.map((b) => b.order), -1) + 1;
+    this.commit('add bucket', () => {
+      for (const b of this.doc.buckets) if (b.order >= order + 1 || b.kind !== 'time') b.order += 1;
+      this.doc.buckets.push({ id: nid(), name, order: order + 1, budget: null, kind: 'time' });
+    });
+  }
+  removeBucket(id: Id): void {
+    const b = this.doc.buckets.find((x) => x.id === id);
+    if (!b || b.kind !== 'time' || this.timeBuckets.length <= 1) return;
+    const fallback = this.timeBuckets.find((x) => x.id !== id)!.id;
+    this.commit('remove bucket', () => {
+      for (const c of this.doc.cards) if (c.bucketId === id) c.bucketId = fallback;
+      this.doc.buckets = this.doc.buckets.filter((x) => x.id !== id);
+      if (this.doc.settings.defaultBucketId === id) this.doc.settings.defaultBucketId = fallback;
+      if (this.doc.settings.lastDropBucketId === id) this.doc.settings.lastDropBucketId = null;
+    });
+  }
+  moveBucket(id: Id, dir: -1 | 1): void {
+    const tb = this.timeBuckets;
+    const i = tb.findIndex((b) => b.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= tb.length) return;
+    this.commit('reorder buckets', () => {
+      const a = this.doc.buckets.find((b) => b.id === tb[i].id)!;
+      const b = this.doc.buckets.find((x) => x.id === tb[j].id)!;
+      [a.order, b.order] = [b.order, a.order];
+    });
+  }
+  updateSettings(patch: Partial<Doc['settings']>): void {
+    this.commit('settings', () => Object.assign(this.doc.settings, patch));
+  }
+
+  replaceDoc(doc: Doc): void {
+    this.commit('import (replace)', () => (this.doc = doc));
+    this.selectedId = null;
+    this.focusStack = [];
+  }
+  mergeDoc(doc: Doc): void {
+    const merged = mergeDocs($state.snapshot(this.doc) as Doc, doc);
+    this.commit('import (merge)', () => (this.doc = merged));
+  }
+
+  // ---------- focus / selection ----------
+  focus(id: Id): void {
+    if (this.focusStack.includes(id)) this.focusStack = this.focusStack.slice(0, this.focusStack.indexOf(id) + 1);
+    else this.focusStack = [...this.focusStack, id];
+    this.selectedId = id;
+    this.editingId = null;
+  }
+  popFocus(): void {
+    this.focusStack = this.focusStack.slice(0, -1);
+    this.selectedId = this.focusedId;
+    this.editingId = null;
+  }
+  clearFocus(): void {
+    this.focusStack = [];
+    this.editingId = null;
+  }
+}
+
+export const store = new Store();
