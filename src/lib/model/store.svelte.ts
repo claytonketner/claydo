@@ -274,17 +274,18 @@ export class Store {
       this.requestComplete(id);
       return;
     }
+    // Only people live on the People tray; todos get there by joining an agenda.
+    if (bucket.kind === 'people' && c.kind !== 'person') return;
     const oldCluster = c.bucketId !== bucketId ? c.clusterId : null;
     this.commit('move card', () => {
       c.bucketId = bucketId;
-      c.pos = pos ?? this.freeSpot(bucketId, id);
+      c.pos = pos ? { x: Math.max(0, Math.round(pos.x)), y: Math.max(0, Math.round(pos.y)) } : this.freeSpot(bucketId, id);
       if (oldCluster) {
         c.clusterId = null;
         this.pruneCluster(oldCluster);
       }
       c.touchedAt = c.updatedAt = Date.now();
       if (bucket.kind === 'time') this.doc.settings.lastDropBucketId = bucketId;
-      if (bucket.kind === 'people' && c.kind === 'todo') c.kind = 'person';
       if (bucket.kind === 'ideas' && c.kind === 'todo') c.kind = 'idea';
       if (bucket.kind === 'time' && c.kind === 'idea') c.kind = 'todo';
     });
@@ -298,6 +299,12 @@ export class Store {
     if (this.isDescendant(parentId, childId)) return false;
     const oldCluster = child.clusterId;
     this.commit('nest card', () => {
+      // Re-append so children (and agendas) list in the order they were added.
+      const i = this.doc.cards.indexOf(child);
+      if (i >= 0) {
+        this.doc.cards.splice(i, 1);
+        this.doc.cards.push(child);
+      }
       child.parentId = parentId;
       child.bucketId = null;
       if (oldCluster) {
@@ -650,6 +657,17 @@ export class Store {
       c.updatedAt = Date.now();
       this.pruneCluster(old);
     });
+  }
+
+  /** Break a group up entirely. */
+  dissolveCluster(clusterId: Id): void {
+    const members = this.doc.cards.filter((c) => c.clusterId === clusterId);
+    if (!members.length) return;
+    this.commit('ungroup all', () => {
+      for (const m of members) m.clusterId = null;
+      this.doc.clusters = this.doc.clusters.filter((k) => k.id !== clusterId);
+    });
+    this.showToast(`Ungrouped ${members.length} cards`, () => this.undo());
   }
 
   private pruneCluster(clusterId: Id): void {

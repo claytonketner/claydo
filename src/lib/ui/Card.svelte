@@ -152,10 +152,10 @@
   const dragOpts = $derived({
     enabled: () => !editing,
     ignore: 'input, textarea, button, a',
-    onStart: () => {
+    onStart: (e: PointerEvent) => {
       store.selectedId = card.id;
       store.editingId = null;
-      beginDrag(card.id);
+      beginDrag(card.id, node, { alone: e.altKey });
       return true;
     },
     onMove: (_pos: { x: number; y: number }, e: PointerEvent) => trackDrag(e, node),
@@ -398,6 +398,12 @@
     animation: none;
     box-shadow: 7px 9px 0 rgba(43, 36, 24, 0.55);
     scale: 1.04;
+    rotate: 0deg;
+  }
+  .card:global([data-drag='following']) {
+    z-index: 99 !important;
+    transition: none;
+    box-shadow: 6px 8px 0 rgba(43, 36, 24, 0.45);
     rotate: 0deg;
   }
   .card:global([data-drag='dropped']) {

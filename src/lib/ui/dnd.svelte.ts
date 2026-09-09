@@ -32,6 +32,10 @@ export type Intent = 'none' | 'group' | 'nest';
  */
 export const dnd = $state({
   draggingId: null as string | null,
+  /** Cluster the dragged card belongs to when the whole group is moving. */
+  draggingClusterId: null as string | null,
+  /** A group is possible here but ⇧ isn't held. */
+  groupHint: false,
   /** Nearest overlapping card and how much of the dragged card it covers. */
   overCardId: null as string | null,
   overlap: 0,
@@ -44,8 +48,34 @@ export const dnd = $state({
   peek: false
 });
 
-export function beginDrag(cardId: string) {
+interface Follower {
+  id: string;
+  el: HTMLElement;
+  start: { x: number; y: number };
+}
+/** Other members of the dragged card's group, moving along with it. */
+let followers: Follower[] = [];
+let anchorStart = { x: 0, y: 0 };
+let anchorStartRect: Rect | null = null;
+
+export function beginDrag(cardId: string, node: HTMLElement, opts: { alone?: boolean } = {}) {
   dnd.draggingId = cardId;
+  dnd.groupHint = false;
+  followers = [];
+  const card = store.card(cardId);
+  anchorStart = card ? { ...card.pos } : { x: 0, y: 0 };
+  anchorStartRect = rectOf(node);
+  dnd.draggingClusterId = null;
+  if (card?.clusterId && !opts.alone && card.doneAt == null) {
+    dnd.draggingClusterId = card.clusterId;
+    for (const m of store.clusterMembers(card.clusterId)) {
+      if (m.id === cardId || m.bucketId !== card.bucketId) continue;
+      const el = [...document.querySelectorAll<HTMLElement>(`[data-card="${m.id}"]`)].find((x) => !x.closest('.stage'));
+      if (!el) continue;
+      el.dataset.drag = 'following';
+      followers.push({ id: m.id, el, start: { ...m.pos } });
+    }
+  }
   dnd.overCardId = null;
   dnd.overlap = 0;
   dnd.intent = 'none';
@@ -63,6 +93,11 @@ function rectOf(el: Element): Rect {
 export function trackDrag(e: PointerEvent, node: HTMLElement) {
   const me = rectOf(node);
   dnd.dragRect = me;
+  if (followers.length && anchorStartRect) {
+    const dx = me.left - anchorStartRect.left;
+    const dy = me.top - anchorStartRect.top;
+    for (const f of followers) f.el.style.transform = `translate(${dx}px, ${dy}px)`;
+  }
 
   // Closest card: most overlap first, otherwise the smallest edge gap.
   let best: { id: string; ratio: number; gap: number; rect: Rect } | null = null;
@@ -73,6 +108,7 @@ export function trackDrag(e: PointerEvent, node: HTMLElement) {
     if (!dnd.peek && document.querySelector('.stage') && !el.closest('.layer.top')) continue;
     const id = el.dataset.card!;
     if (!id || id === dragged) continue;
+    if (followers.some((f) => f.id === id)) continue;
     const r = rectOf(el);
     const ratio = overlapRatio(me, r);
     const gap = gapBetween(me, r);
@@ -82,13 +118,17 @@ export function trackDrag(e: PointerEvent, node: HTMLElement) {
 
   const can = best && dragged ? capabilities(dragged, best.id) : null;
   let intent: Intent = 'none';
+  let hint = false;
   if (best && can && !e.altKey) {
-    if (best.ratio >= NEST_T && can.nest) intent = 'nest';
-    else if (can.group || can.nest) intent = 'group';
+    const targetIsPerson = store.card(best.id)?.kind === 'person';
+    if (can.nest && (best.ratio >= NEST_T || targetIsPerson)) intent = 'nest';
+    else if (can.group && e.shiftKey) intent = 'group';
+    else if (can.group) hint = true;
   }
-  dnd.overCardId = intent === 'none' ? null : best!.id;
+  dnd.groupHint = hint;
+  dnd.overCardId = intent === 'none' && !hint ? null : best!.id;
   dnd.overlap = best ? best.ratio : 0;
-  dnd.targetRect = intent === 'none' ? null : best!.rect;
+  dnd.targetRect = intent === 'none' && !hint ? null : best!.rect;
   dnd.intent = intent;
 
   const dropEl = elementUnder(e, '[data-drop]', node);
@@ -96,6 +136,13 @@ export function trackDrag(e: PointerEvent, node: HTMLElement) {
 }
 
 export function endDrag() {
+  for (const f of followers) {
+    f.el.style.transform = '';
+    if (f.el.dataset.drag === 'following') delete f.el.dataset.drag;
+  }
+  followers = [];
+  dnd.draggingClusterId = null;
+  dnd.groupHint = false;
   dnd.draggingId = null;
   dnd.overCardId = null;
   dnd.overlap = 0;
@@ -111,8 +158,10 @@ function capabilities(childId: string, targetId: string): { nest: boolean; group
   const target = store.card(targetId);
   if (!child || !target) return { nest: false, group: false };
   const nest = child.kind !== 'person' && child.doneAt == null && target.doneAt == null && !store.isDescendant(targetId, childId);
-  // Groups are for peers on the same tray (both top-level with explicit buckets, not done).
-  const group = child.doneAt == null && target.doneAt == null && !!child.bucketId && !!target.bucketId;
+  // Groups are for peers on the same tray (both top-level with explicit buckets, not done),
+  // and people only group with people.
+  const group =
+    child.doneAt == null && target.doneAt == null && !!child.bucketId && !!target.bucketId && (child.kind === 'person') === (target.kind === 'person');
   return { nest, group };
 }
 
@@ -121,6 +170,37 @@ function capabilities(childId: string, targetId: string): { nest: boolean; group
  * coordinates; for a same-container release we store it as the card's spot.
  */
 export function resolveDrop(cardId: string, node: HTMLElement, pos: { x: number; y: number }, e: PointerEvent, ctx: { currentDropKey: string | null; free: boolean }): void {
+  const before = store.card(cardId);
+  const bucketBefore = before?.bucketId ?? null;
+  const parentBefore = before?.parentId ?? null;
+  resolveAnchor(cardId, node, pos, e, ctx);
+  const after = store.card(cardId);
+  // The rest of the group comes along if the anchor simply moved (same or different tray).
+  if (followers.length && after && after.doneAt == null && after.parentId === parentBefore && after.bucketId) {
+    const dx = after.pos.x - anchorStart.x;
+    const dy = after.pos.y - anchorStart.y;
+    const moves: { id: string; pos: { x: number; y: number } }[] = [];
+    for (const f of followers) {
+      const target = { x: f.start.x + dx, y: f.start.y + dy };
+      if (after.bucketId === bucketBefore) moves.push({ id: f.id, pos: target });
+      else store.moveToBucket(f.id, after.bucketId, target);
+    }
+    if (moves.length) store.setPositions(moves);
+    if (after.bucketId !== bucketBefore) {
+      // moveToBucket drops cluster membership on a tray change; re-form the group.
+      for (const f of followers) store.group(f.id, cardId);
+    }
+  }
+  if (pendingRelayout) {
+    const b = pendingRelayout;
+    pendingRelayout = null;
+    relayoutTray(b, cardId);
+  }
+}
+
+let pendingRelayout: string | null = null;
+
+function resolveAnchor(cardId: string, node: HTMLElement, pos: { x: number; y: number }, e: PointerEvent, ctx: { currentDropKey: string | null; free: boolean }): void {
   const card = store.card(cardId);
   if (!card) return;
   const key = dnd.overDropKey;
@@ -145,7 +225,7 @@ export function resolveDrop(cardId: string, node: HTMLElement, pos: { x: number;
       if (bucket && bucket.kind !== 'done' && bucket.kind !== 'people') {
         const trayEl = elementUnder(e, `[data-drop="${key}"]`, node);
         store.unnestTo(cardId, bucketId, trayEl ? relativePos(node, trayEl) : undefined);
-        relayoutTray(bucketId, cardId);
+        pendingRelayout = bucketId;
         store.showToast('Pulled out onto the board', () => store.undo());
       }
     }
@@ -162,7 +242,7 @@ export function resolveDrop(cardId: string, node: HTMLElement, pos: { x: number;
       store.setPos(cardId, card.doneAt != null ? { x: p.x, y: 0 } : p);
     }
     settleGrouping(cardId, target, dnd.intent);
-    if (ctx.free && card.doneAt == null && card.bucketId) relayoutTray(card.bucketId, cardId);
+    if (ctx.free && card.doneAt == null && card.bucketId) pendingRelayout = card.bucketId;
     return;
   }
 
@@ -174,6 +254,10 @@ export function resolveDrop(cardId: string, node: HTMLElement, pos: { x: number;
       if (!bucket) return;
       if (bucket.kind === 'done') {
         store.requestComplete(cardId);
+        return;
+      }
+      if (bucket.kind === 'people' && card.kind !== 'person') {
+        store.showToast('Drop it on a person to add it to their agenda');
         return;
       }
       const trayEl = elementUnder(e, `[data-drop="${key}"]`, node);
@@ -189,7 +273,7 @@ export function resolveDrop(cardId: string, node: HTMLElement, pos: { x: number;
         store.moveToBucket(cardId, val, rel);
       }
       settleGrouping(cardId, target, dnd.intent);
-      if (rel) relayoutTray(val, cardId);
+      if (rel) pendingRelayout = val;
       return;
     }
     case 'inherit':
@@ -240,7 +324,7 @@ function settleGrouping(cardId: string, target: ReturnType<typeof store.card>, i
     }
     return;
   }
-  if (card.clusterId) {
+  if (card.clusterId && !followers.length) {
     const me = document.querySelector<HTMLElement>(`[data-card="${cardId}"]`);
     if (!me) return;
     const mine = rectOf(me);

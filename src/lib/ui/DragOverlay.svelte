@@ -5,7 +5,7 @@
   const hull = $derived.by(() => {
     const a = dnd.dragRect;
     const b = dnd.targetRect;
-    if (!a || !b || dnd.intent === 'none') return null;
+    if (!a || !b || (dnd.intent === 'none' && !dnd.groupHint)) return null;
     const pad = 10;
     const left = Math.min(a.left, b.left) - pad;
     const top = Math.min(a.top, b.top) - pad;
@@ -16,12 +16,16 @@
   const progress = $derived(Math.max(0, Math.min(1, dnd.overlap / NEST_T)));
 </script>
 
-{#if dnd.draggingId && dnd.intent !== 'none' && hull && dnd.dragRect}
-  <div class="hull {dnd.intent}" style:left="{hull.left}px" style:top="{hull.top}px" style:width="{hull.width}px" style:height="{hull.height}px"></div>
-  {#key dnd.intent}
-    <div class="label {dnd.intent}" style:left="{dnd.dragRect.left + dnd.dragRect.width / 2}px" style:top="{dnd.dragRect.top - 34}px">
-      <span class="word">{dnd.intent === 'nest' ? 'NEST' : 'GROUP'}</span>
-      <span class="bar" title="Overlap more to nest"><span class="fill" style:width="{progress * 100}%"></span></span>
+{#if dnd.draggingId && (dnd.intent !== 'none' || dnd.groupHint) && hull && dnd.dragRect}
+  {@const mode = dnd.intent === 'none' ? 'hint' : dnd.intent}
+  <div class="hull {mode}" style:left="{hull.left}px" style:top="{hull.top}px" style:width="{hull.width}px" style:height="{hull.height}px"></div>
+  {#key mode}
+    <div class="label {mode}" style:left="{dnd.dragRect.left + dnd.dragRect.width / 2}px" style:top="{dnd.dragRect.top - (mode === 'hint' ? 44 : 34)}px">
+      <span class="word">
+        {dnd.intent === 'nest' ? 'NEST' : 'GROUP'}
+        {#if mode === 'hint'}<span class="sub">hold ⇧</span>{/if}
+      </span>
+      {#if mode !== 'hint'}<span class="bar" title="Overlap more to nest"><span class="fill" style:width="{progress * 100}%"></span></span>{/if}
     </div>
   {/key}
 {/if}
@@ -39,6 +43,27 @@
       top 60ms linear,
       width 60ms linear,
       height 60ms linear;
+  }
+  .hull.hint {
+    opacity: 0.45;
+    border-style: dotted;
+    background: transparent;
+  }
+  .label.hint {
+    opacity: 0.75;
+  }
+  .word {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+  }
+  .sub {
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 9.5px;
+    letter-spacing: 0.02em;
+    opacity: 0.9;
   }
   .hull.nest {
     border: 3px solid var(--accent);

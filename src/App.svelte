@@ -192,7 +192,7 @@
         <button class="btn icon" disabled={!store.canUndo} title="Undo (⌘Z)" onclick={() => store.undo()}><Icon name="undo" /></button>
         <button class="btn icon" disabled={!store.canRedo} title="Redo (⇧⌘Z)" onclick={() => store.redo()}><Icon name="redo" /></button>
         <button class="btn icon trash" title="Trash" onclick={() => (store.trashOpen = true)}>
-          <Icon name="trash" />{#if store.trash.length}<span class="badge">{store.trash.length}</span>{/if}
+          <Icon name="trash" />
         </button>
         <button class="btn icon" title="Settings" onclick={() => (store.settingsOpen = true)}><Icon name="gear" /></button>
       </div>
@@ -287,25 +287,7 @@
     display: flex;
     gap: 6px;
   }
-  .trash {
-    position: relative;
-  }
-  .badge {
-    position: absolute;
-    top: -7px;
-    right: -7px;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 4px;
-    border-radius: 9px;
-    border: 2px solid var(--line);
-    background: var(--accent);
-    color: #fff;
-    font-size: 10px;
-    font-weight: 800;
-    line-height: 14px;
-    text-align: center;
-  }
+
   .viewbar {
     display: flex;
     align-items: center;

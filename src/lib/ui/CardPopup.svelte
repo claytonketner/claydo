@@ -61,7 +61,9 @@
   function setBucket(v: string) {
     if (!card) return;
     if (v === 'inherit') store.updateCard(card.id, { bucketId: null }, { label: 'inherit bucket' });
-    else if (card.parentId) {
+    else if (v.startsWith('agenda:')) {
+      if (store.nest(card.id, v.slice(7))) store.showToast(`Added to ${store.card(v.slice(7))?.title}'s agenda`, () => store.undo());
+    } else if (card.parentId) {
       const b = store.doc.buckets.find((x) => x.id === v);
       store.updateCard(card.id, { bucketId: v, pos: store.freeSpot(v, card.id), kind: b?.kind === 'ideas' ? 'idea' : card.kind === 'idea' && b?.kind === 'time' ? 'todo' : card.kind }, { label: 'schedule' });
     } else store.moveToBucket(card.id, v);
@@ -113,7 +115,9 @@
             <span class="lbl">When</span>
             <select value={card.bucketId ?? 'inherit'} onchange={(e) => setBucket((e.target as HTMLSelectElement).value)}>
               {#if card.parentId}
-                <option value="inherit">{parentIsPerson ? 'Agenda' : `Inherits (${parent ? (store.bucketOf(parent)?.name ?? 'parent') : 'parent'})`}</option>
+                <option value="inherit">{parentIsPerson ? `Agenda · ${parent?.title}` : `Inherits (${parent ? (store.bucketOf(parent)?.name ?? 'parent') : 'parent'})`}</option>
+              {:else}
+                {#each people as p (p.id)}<option value="agenda:{p.id}">Agenda · {p.title}</option>{/each}
               {/if}
               {#each timeBuckets as b (b.id)}<option value={b.id}>{b.name}</option>{/each}
               {#if ideasBucket}<option value={ideasBucket.id}>{ideasBucket.name}</option>{/if}

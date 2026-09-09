@@ -30,7 +30,7 @@
     if (isDone) store.doneTrayWidth = bodyWidth;
   });
   const yOf = (c: CardT, i: number) => (isDone ? 16 + i * DONE_STEP : c.pos.y);
-  const height = $derived(Math.max(isDone ? 110 : 150, ...cards.map((c, i) => yOf(c, i) + (cardHeights[c.id] ?? CARD_H) + 30)) + extra);
+  const height = $derived(Math.max(isDone ? 110 : 150, ...cards.map((c, i) => yOf(c, i) + (cardHeights[c.id] ?? CARD_H) + 30)));
   const WEEK = 7 * 86_400_000;
   const doneThisWeek = $derived(isDone ? store.doneCards.filter((c) => Date.now() - c.doneAt! < WEEK).length : 0);
 
@@ -41,7 +41,7 @@
     for (const c of cards) if (c.clusterId) groups.set(c.clusterId, [...(groups.get(c.clusterId) ?? []), c]);
     const out: { id: string; color: string; x: number; y: number; w: number; h: number }[] = [];
     for (const [id, members] of groups) {
-      if (members.length < 2) continue;
+      if (members.length < 2 || id === dnd.draggingClusterId) continue;
       const color = store.doc.clusters.find((k) => k.id === id)?.color ?? '#999';
       const x0 = Math.min(...members.map((m) => Math.min(m.pos.x, maxX)));
       const y0 = Math.min(...members.map((m) => m.pos.y));
@@ -79,7 +79,9 @@
   }
 </script>
 
-<section class="tray kind-{bucket.kind}" class:over>
+<!-- While a drag hovers, the tray grows an apron below (padding) and pulls the same amount back
+     with a negative margin, so it overlaps whatever is beneath instead of shoving it around. -->
+<section class="tray kind-{bucket.kind}" class:over class:hovering style:margin-bottom="-{extra}px">
   <header>
     {#if renaming}
       <input
@@ -118,9 +120,11 @@
     {/if}
   </header>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="body" class:timeline={isDone} data-drop={dropKey} style:min-height="{height}px" bind:clientWidth={bodyWidth} ondblclick={onDbl}>
+  <div class="body" class:timeline={isDone} data-drop={dropKey} style:min-height="{height}px" style:padding-bottom="{extra}px" bind:clientWidth={bodyWidth} ondblclick={onDbl}>
     {#each hulls as h (h.id)}
-      <div class="hull" style:left="{h.x}px" style:top="{h.y}px" style:width="{h.w}px" style:height="{h.h}px" style:--c={h.color}></div>
+      <div class="hull" style:left="{h.x}px" style:top="{h.y}px" style:width="{h.w}px" style:height="{h.h}px" style:--c={h.color}>
+        <button class="ungroup" title="Ungroup these cards" onclick={() => store.dissolveCluster(h.id)}>✕</button>
+      </div>
     {/each}
     {#each cards as card, i (card.id)}
       <Card {card} layout="free" {dropKey} {maxX} y={isDone ? yOf(card, i) : null} />
@@ -141,7 +145,12 @@
     background: var(--tray);
     transition:
       background 120ms,
-      border-color 120ms;
+      border-color 120ms,
+      margin-bottom 200ms var(--ease-out);
+  }
+  .tray.hovering {
+    position: relative;
+    z-index: 30;
   }
   .tray.over {
     background: var(--tray-hover);
@@ -202,7 +211,9 @@
     position: relative;
     flex: 1;
     padding: 0;
-    transition: min-height 240ms var(--ease-out);
+    transition:
+      min-height 240ms var(--ease-out),
+      padding-bottom 200ms var(--ease-out);
   }
   .body.timeline {
     background-image: radial-gradient(circle, rgba(47, 154, 58, 0.35) 1px, transparent 1.5px);
@@ -215,11 +226,35 @@
     border-radius: 12px;
     background: color-mix(in srgb, var(--c) 8%, transparent);
     pointer-events: none;
+    z-index: 0;
     transition:
       left 200ms var(--ease-out),
       top 200ms var(--ease-out),
       width 200ms var(--ease-out),
       height 200ms var(--ease-out);
+  }
+  .ungroup {
+    position: absolute;
+    top: -9px;
+    right: -9px;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 2px solid var(--line);
+    border-radius: 50%;
+    background: var(--c);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1;
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow: 1px 1px 0 var(--shadow);
+    opacity: 0.85;
+  }
+  .ungroup:hover {
+    opacity: 1;
+    scale: 1.15;
   }
   .empty {
     position: absolute;

@@ -179,7 +179,7 @@
           <span><span class="kbd">⌘Z</span> undo · <span class="kbd">⇧⌘Z</span> redo</span>
           <span><span class="kbd">/</span> search</span>
           <span><span class="kbd">esc</span> back / deselect</span>
-          <span><span class="kbd">⌥</span>+drop to overlap instead of nest</span>
+          <span><span class="kbd">⇧</span>+drag near a card to group · <span class="kbd">⌥</span>+drag a grouped card alone</span>
           <span>type anywhere to start a new todo</span>
         </div>
       </section>

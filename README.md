@@ -50,11 +50,12 @@ so you can drop it anywhere on the board, which un-nests it.
 
 **Drag.** Cards land exactly where you let go, with a little bounce. Drop one
 on a tray to move it; the tray opens up extra room below while you hover.
-After a drop, neighbours nudge aside so nothing overlaps, and groups move as
-one. Bring a card close to another and they start to stick: a **GROUP** label
-and a hull appear, and a bar shows how much overlap turns it into **NEST**. Cross that line and it pops. Grouped cards
-share a dashed hull and a colored edge; drag one away to leave the group. Hold
-⌥ to just overlap with no grouping.
+After a drop, neighbours nudge aside so nothing overlaps. Bring a card close
+to another while holding **⇧** and they group: a **GROUP** label and a hull
+appear (without ⇧ you get a faded hint). Overlap most of a card and it turns
+into **NEST**. Drop a todo on a person and it joins their agenda. Grouped
+cards share a dashed hull with an ✕ to ungroup, and dragging any member moves
+the whole group; hold ⌥ to drag one card out on its own.
 
 **Sub-todos.** A card with sub-todos shows little tabs along its bottom edge,
 one per child. Press `F` or double-click to open its popup.
