@@ -6,6 +6,8 @@ import { emptyDoc, newCard, seedDoc } from './seed';
 import { CARD_H, CARD_W, type Bucket, type Card, type Doc, type Effort, type Id, type Value, type ViewMode } from './types';
 import { loadDoc, saveDailySnapshot, saveDoc } from '../persist/db';
 import { downloadJson, mergeDocs } from '../persist/backup';
+import { captureRects, centerOf, flyFrom } from '../physics/fx';
+import { tick } from 'svelte';
 
 const SAVE_DEBOUNCE_MS = 300;
 
@@ -24,6 +26,9 @@ export class Store {
   toast = $state<{ id: number; text: string; undo?: () => void } | null>(null);
   dirty = $state(false);
   lastCompletedId = $state<Id | null>(null);
+  /** Where to throw the party when something gets finished (screen coords). */
+  celebrateAt = $state<{ x: number; y: number; seq: number } | null>(null);
+  private celebrateSeq = 0;
   /** A complete/delete waiting on the "what about the sub-items?" dialog. */
   pending = $state<{ action: 'complete' | 'delete'; id: Id; count: number } | null>(null);
 
@@ -109,6 +114,13 @@ export class Store {
     this.scheduleSave();
   }
 
+  /** Run `fn`, then fly any board card that moved to its new place. */
+  private animated(fn: () => void): void {
+    const before = captureRects();
+    fn();
+    void tick().then(() => flyFrom(before));
+  }
+
   /** Wrap a mutation in an undo checkpoint and a save. */
   commit(label: string, fn: () => void): void {
     this.history.record($state.snapshot(this.doc) as Doc, label);
@@ -119,7 +131,7 @@ export class Store {
   undo(): void {
     const prev = this.history.undo($state.snapshot(this.doc) as Doc);
     if (!prev) return;
-    this.doc = prev;
+    this.animated(() => (this.doc = prev));
     this.scheduleSave();
     this.showToast('Undone');
   }
@@ -127,7 +139,7 @@ export class Store {
   redo(): void {
     const next = this.history.redo($state.snapshot(this.doc) as Doc);
     if (!next) return;
-    this.doc = next;
+    this.animated(() => (this.doc = next));
     this.scheduleSave();
     this.showToast('Redone');
   }
@@ -286,26 +298,42 @@ export class Store {
     const c = this.byId.get(id);
     if (!c || c.kind === 'person') return;
     const now = Date.now();
+    const before = captureRects();
     this.commit('complete', () => {
       c.doneAt = now;
       c.updatedAt = now;
       // Done tray is a timeline: y comes from order, x is a random-ish spot for fun.
       c.pos = { x: Math.round(hash01(c.id, 7) * 520), y: 0 };
     });
+    void tick().then(() => flyFrom(before));
+    this.celebrate(centerOf(before.get(id)));
     this.lastCompletedId = id;
     if (this.selectedId === id) this.selectedId = null;
     this.showToast(`Done: ${c.title || 'untitled'}`, () => this.reopen(id));
   }
 
+  private celebrate(at: { x: number; y: number } | null): void {
+    if (!this.doc.settings.celebrate) return;
+    const p = at ?? { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    this.celebrateAt = { ...p, seq: ++this.celebrateSeq };
+  }
+
   reopen(id: Id): void {
     const c = this.byId.get(id);
     if (!c) return;
-    this.commit('reopen', () => {
+    this.animated(() => this.commit('reopen', () => {
       c.doneAt = null;
       c.touchedAt = c.updatedAt = Date.now();
       if (!c.parentId && !c.bucketId) c.bucketId = this.defaultBucketId;
       if (c.bucketId) c.pos = this.freeSpot(c.bucketId, id);
-    });
+    }));
+  }
+
+  /** Reset a cracked old card to like-new. */
+  refresh(id: Id): void {
+    const now = Date.now();
+    this.updateCard(id, { createdAt: now }, { label: 'refresh' });
+    this.showToast('Good as new');
   }
 
   /** Every card below `id` in the hierarchy. */
@@ -379,6 +407,7 @@ export class Store {
     if (!c) return;
     const now = Date.now();
     const all = [c, ...this.descendantsOf(id)].filter((x) => x.doneAt == null && x.kind !== 'person');
+    const before = captureRects();
     this.commit('complete all', () => {
       for (const x of all) {
         x.doneAt = now;
@@ -386,6 +415,8 @@ export class Store {
         x.pos = { x: Math.round(hash01(x.id, 7) * 520), y: 0 };
       }
     });
+    void tick().then(() => flyFrom(before));
+    this.celebrate(centerOf(before.get(id)));
     this.lastCompletedId = id;
     if (this.selectedId && all.some((x) => x.id === this.selectedId)) this.selectedId = null;
     this.showToast(`Done: ${c.title || 'untitled'} + ${all.length - 1} sub-items`, () => this.undo());

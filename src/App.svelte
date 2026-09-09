@@ -3,7 +3,7 @@
   import { store } from './lib/model/store.svelte';
   import Board from './lib/ui/Board.svelte';
   import GroupView from './lib/ui/GroupView.svelte';
-  import CardPopup from './lib/ui/CardPopup.svelte';
+  import PopupStack from './lib/ui/PopupStack.svelte';
   import DragOverlay from './lib/ui/DragOverlay.svelte';
   import ConfirmDialog from './lib/ui/ConfirmDialog.svelte';
   import QuickAdd from './lib/ui/QuickAdd.svelte';
@@ -11,7 +11,7 @@
   import Toast from './lib/ui/Toast.svelte';
   import ViewSwitcher from './lib/ui/ViewSwitcher.svelte';
   import Reflect from './lib/ui/Reflect.svelte';
-  import Confetti from './lib/ui/Confetti.svelte';
+  import Celebration from './lib/ui/Celebration.svelte';
   import { focusQuickAdd, focusSearch, isTypingTarget, registerSearch } from './lib/ui/ui.svelte';
 
   let searchEl = $state<HTMLInputElement | null>(null);
@@ -151,7 +151,7 @@
   function onPointerDown(e: PointerEvent) {
     const t = e.target as HTMLElement | null;
     if (!t) return;
-    if (t.closest('[data-card], button, input, textarea, select, a, label, .popup, .dialog, .toast, summary')) return;
+    if (t.closest('[data-card], button, input, textarea, select, a, label, .stage, .dialog, .toast, summary')) return;
     store.selectedId = null;
     store.editingId = null;
   }
@@ -186,10 +186,10 @@
         {#if store.search}<button class="clear" onclick={() => (store.search = '')}>✕</button>{:else}<span class="kbd">/</span>{/if}
       </div>
       <div class="history">
-        <button class="btn sm ghost" disabled={!store.canUndo} title="Undo (⌘Z)" onclick={() => store.undo()}>↶</button>
-        <button class="btn sm ghost" disabled={!store.canRedo} title="Redo (⇧⌘Z)" onclick={() => store.redo()}>↷</button>
+        <button class="btn icon" disabled={!store.canUndo} title="Undo (⌘Z)" onclick={() => store.undo()}>↶</button>
+        <button class="btn icon" disabled={!store.canRedo} title="Redo (⇧⌘Z)" onclick={() => store.redo()}>↷</button>
+        <button class="btn icon" title="Settings" onclick={() => (store.settingsOpen = true)}>⚙</button>
       </div>
-      <button class="btn sm" title="Settings" onclick={() => (store.settingsOpen = true)}>⚙</button>
     </header>
     <div class="viewbar">
       <ViewSwitcher />
@@ -203,12 +203,12 @@
     {/if}
   </div>
 
-  <CardPopup />
+  <PopupStack />
   <DragOverlay />
   <ConfirmDialog />
   <Settings />
   <Reflect />
-  <Confetti />
+  <Celebration />
   <Toast />
 {/if}
 
@@ -250,9 +250,9 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 5px 8px;
-    background: #fff;
-    color: #2b2418;
+    padding: 7px 8px;
+    background: var(--field);
+    color: var(--field-ink);
     width: 190px;
   }
   .search.has {
@@ -278,7 +278,7 @@
   }
   .history {
     display: flex;
-    gap: 2px;
+    gap: 6px;
   }
   .viewbar {
     display: flex;

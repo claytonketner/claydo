@@ -38,10 +38,11 @@
 </div>
 
 <style>
+  /* Cards are always light paper, so these stay fixed rather than following the theme. */
   .notes {
     font-size: 11.5px;
     line-height: 1.35;
-    color: var(--ink-soft);
+    color: #6b5f4d;
     white-space: pre-wrap;
     word-break: break-word;
   }
@@ -61,7 +62,7 @@
   }
   .more {
     font-size: 10px;
-    color: var(--ink-faint);
+    color: #a2957f;
     margin-top: 2px;
   }
   a {

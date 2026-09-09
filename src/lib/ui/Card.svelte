@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { hash01 } from '../model/ids';
   import { staleStage, STALE_LABELS } from '../model/staleness';
   import { store } from '../model/store.svelte';
@@ -20,18 +21,21 @@
     /** override the y position (done timeline) */
     y?: number | null;
     showParent?: boolean;
+    /** Inside the detail popup: wider, full notes, click-to-edit, no drag. */
+    popup?: boolean;
   }
-  let { card, layout = 'free', dropKey = null, maxX = Infinity, y = null, showParent = true }: Props = $props();
+  let { card, layout = 'free', dropKey = null, maxX = Infinity, y = null, showParent = true, popup = false }: Props = $props();
 
   let node: HTMLElement;
   let clipped = $state(false);
+  let localEditing = $state(false);
   let titleDraft = $state('');
   let notesDraft = $state('');
   let titleEl = $state<HTMLTextAreaElement | null>(null);
   let notesEl = $state<HTMLTextAreaElement | null>(null);
 
-  const selected = $derived(store.selectedId === card.id);
-  const editing = $derived(store.editingId === card.id);
+  const selected = $derived(!popup && store.selectedId === card.id);
+  const editing = $derived(popup ? localEditing : store.editingId === card.id);
   const done = $derived(card.doneAt != null);
   const groupTarget = $derived(dnd.overCardId === card.id && dnd.intent === 'group');
   const nestTarget = $derived(dnd.overCardId === card.id && dnd.intent === 'nest');
@@ -40,63 +44,78 @@
   const parent = $derived(card.parentId ? store.card(card.parentId) : null);
   const bucket = $derived(store.bucketOf(card));
   const stale = $derived(card.kind === 'todo' && !done && bucket?.kind === 'time' ? staleStage(card.createdAt) : 0);
-  const rot = $derived((hash01(card.id) * 3 - 1.5).toFixed(2));
+  const rot = $derived(popup ? '0' : (hash01(card.id) * 3 - 1.5).toFixed(2));
   const x = $derived(Math.min(card.pos.x, Math.max(0, maxX)));
   const top = $derived(y ?? card.pos.y);
   const mentions = $derived(card.kind === 'person' ? store.mentionsOf(card.id) : []);
   const cluster = $derived(card.clusterId ? store.clusterOf(card.id) : null);
   // svelte-ignore state_referenced_locally
-  const fresh = Date.now() - card.createdAt < 1500;
+  const fresh = !popup && Date.now() - card.createdAt < 1500;
 
+  // Load drafts when editing starts; save whatever was typed when it ends for any reason.
+  let wasEditing = false;
   $effect(() => {
     if (editing) {
-      titleDraft = card.title;
-      notesDraft = card.notes;
-      requestAnimationFrame(() => {
-        titleEl?.focus();
-        titleEl?.select();
-      });
+      if (!wasEditing) {
+        wasEditing = true;
+        untrack(() => {
+          titleDraft = card.title;
+          notesDraft = card.notes;
+        });
+        requestAnimationFrame(() => {
+          titleEl?.focus();
+          titleEl?.select();
+        });
+      }
+    } else if (wasEditing) {
+      wasEditing = false;
+      untrack(saveDrafts);
     }
   });
 
   /** Watch whether the card's content is taller than its max height. */
   function clipWatch(el: HTMLElement) {
-    const check = () => (clipped = el.scrollHeight > el.clientHeight + 2);
+    const check = () => (clipped = !popup && el.scrollHeight > el.clientHeight + 2);
     check();
     const ro = new ResizeObserver(check);
     ro.observe(el);
     return { destroy: () => ro.disconnect() };
   }
 
-  function commitEdit() {
-    if (!editing) return;
+  function saveDrafts() {
     const title = titleDraft.trim();
     const notes = notesDraft.replace(/\s+$/, '');
-    if (title !== card.title || notes !== card.notes) store.updateCard(card.id, { title, notes });
-    if (!title && !notes && kids.length === 0) store.deleteCard(card.id);
-    store.editingId = null;
+    const live = store.card(card.id);
+    if (!live) return;
+    if (title !== live.title || notes !== live.notes) store.updateCard(card.id, { title, notes });
+    if (!popup && !title && !notes && kids.length === 0) store.deleteCard(card.id);
   }
-  function cancelEdit() {
-    if (!card.title && !card.notes && kids.length === 0) store.deleteCard(card.id);
-    store.editingId = null;
+  function startEdit() {
+    if (done) return;
+    if (popup) localEditing = true;
+    else store.editingId = card.id;
+  }
+  function finishEdit() {
+    if (popup) localEditing = false;
+    else if (store.editingId === card.id) store.editingId = null;
   }
   function onTitleKey(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Escape') {
       e.preventDefault();
-      commitEdit();
-    } else if (e.key === 'Tab' && !e.shiftKey) {
+      finishEdit();
+    } else if (e.key === 'Tab' && !e.shiftKey && card.kind !== 'person') {
       e.preventDefault();
       notesEl?.focus();
-    } else if (e.key === 'Escape') {
+    } else if (e.key === 'Tab') {
       e.preventDefault();
-      cancelEdit();
+      finishEdit();
     }
     e.stopPropagation();
   }
   function onNotesKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' || (e.key === 'Tab' && !e.shiftKey)) {
       e.preventDefault();
-      commitEdit();
+      finishEdit();
     } else if (e.key === 'Tab' && e.shiftKey) {
       e.preventDefault();
       titleEl?.focus();
@@ -105,24 +124,30 @@
   }
   function onBlurEditor(e: FocusEvent) {
     const next = e.relatedTarget as HTMLElement | null;
-    if (next && node.contains(next)) return;
-    commitEdit();
+    if (next && node.contains(next) && next.tagName === 'TEXTAREA') return;
+    finishEdit();
   }
 
   function onClick(e: PointerEvent) {
-    if ((e.target as HTMLElement).closest('a, button, input, textarea')) return;
+    const t = e.target as HTMLElement;
+    if (t.closest('a, button, input, textarea')) return;
     if (editing) return;
+    if (popup) {
+      startEdit();
+      return;
+    }
     store.selectedId = card.id;
     store.editingId = null;
   }
   function onDblClick(e: MouseEvent) {
+    if (popup) return;
     if ((e.target as HTMLElement).closest('a, button, input, textarea')) return;
     if (editing) return;
     store.focus(card.id);
   }
 
   const dragOpts = $derived({
-    enabled: () => !editing,
+    enabled: () => !editing && !popup,
     ignore: 'input, textarea, button, a',
     onStart: () => {
       store.selectedId = card.id;
@@ -134,6 +159,7 @@
     onRelease: (pos: { x: number; y: number }, e: PointerEvent) => {
       resolveDrop(card.id, node, pos, e, { currentDropKey: dropKey, free: layout === 'free' });
       endDrag();
+      if (store.selectedId === card.id) store.selectedId = null;
     },
     onClick
   });
@@ -143,13 +169,13 @@
 <div
   bind:this={node}
   use:draggable={dragOpts}
-  use:measureCard={card.id}
-  use:clipWatch
+  use:measureCard={layout === 'free' && !popup ? card.id : null}
   class="card kind-{card.kind} stale-{stale} layout-{layout}"
   class:selected
   class:editing
   class:done
   class:fresh
+  class:popup
   class:clipped
   class:group-target={groupTarget}
   class:nest-target={nestTarget}
@@ -159,73 +185,82 @@
   style:left={layout === 'free' ? `${x}px` : undefined}
   style:top={layout === 'free' ? `${top}px` : undefined}
   style:--paper-custom={card.color ?? undefined}
-  data-card={card.id}
+  data-card={popup ? undefined : card.id}
   ondblclick={onDblClick}
   onpointerenter={() => (ui.hoveredId = card.id)}
   onpointerleave={() => (ui.hoveredId = ui.hoveredId === card.id ? null : ui.hoveredId)}
-  title={stale ? `Created ${STALE_LABELS[stale]} ago` : undefined}
+  title={stale && !popup ? `Created ${STALE_LABELS[stale]} ago` : undefined}
 >
   {#if card.kind === 'person'}
     <div class="pin"></div>
   {/if}
 
-  <div class="tools">
-    {#if done}
-      <button class="tool reopen" title="Reopen" onclick={() => store.reopen(card.id)}>↺</button>
-    {:else if card.kind !== 'person'}
-      <button class="tool done-btn" title="Mark done (D)" onclick={() => store.requestComplete(card.id)}>✓</button>
-    {/if}
-    <button class="tool del" title="Delete" onclick={() => store.requestDelete(card.id)}>✕</button>
-  </div>
-
-  {#if editing}
-    <textarea
-      bind:this={titleEl}
-      class="title-input"
-      rows="1"
-      use:autosize
-      bind:value={titleDraft}
-      onkeydown={onTitleKey}
-      onblur={onBlurEditor}
-      placeholder={card.kind === 'person' ? 'Name' : 'What needs doing?'}
-    ></textarea>
-    {#if card.kind !== 'person'}
-      <textarea bind:this={notesEl} class="notes-input" rows="1" use:autosize bind:value={notesDraft} onkeydown={onNotesKey} onblur={onBlurEditor} placeholder="Notes, links, - bullets"></textarea>
-    {/if}
-  {:else}
-    <div class="title">{#if done}<span class="check">✓</span> {/if}{card.title || '(untitled)'}</div>
-    {#if card.notes && card.kind !== 'person'}
-      <div class="notes-preview">
-        <NotesView text={card.notes} clamp={4} />
-      </div>
-    {/if}
-  {/if}
-
-  {#if card.kind === 'person'}
-    <div class="discuss">{openKids.length + mentions.length} to discuss</div>
-  {/if}
-
-  {#if card.kind !== 'person' && (selected || card.effort != null || card.value != null || card.tags.length || card.peopleIds.length)}
-    <div class="foot">
-      <Chips {card} editable={selected && !done} />
+  {#if !popup}
+    <div class="tools">
+      {#if done}
+        <button class="tool reopen" title="Reopen" onclick={() => store.reopen(card.id)}>↺</button>
+      {:else if card.kind !== 'person'}
+        <button class="tool done-btn" title="Mark done (D)" onclick={() => store.requestComplete(card.id)}>✓</button>
+      {/if}
+      <button class="tool del" title="Delete" onclick={() => store.requestDelete(card.id)}>✕</button>
     </div>
   {/if}
 
-  <div class="links">
-    {#if kids.length && card.kind !== 'person'}
-      <button class="kids" title="Open sub-todos" onclick={() => store.focus(card.id)}>
-        <span class="arrow">↴</span> {kids.length - openKids.length}/{kids.length}
-      </button>
+  <div class="content" use:clipWatch>
+    {#if editing}
+      <textarea
+        bind:this={titleEl}
+        class="title-input"
+        rows="1"
+        use:autosize
+        bind:value={titleDraft}
+        onkeydown={onTitleKey}
+        onblur={onBlurEditor}
+        placeholder={card.kind === 'person' ? 'Name' : 'What needs doing?'}
+      ></textarea>
+      {#if card.kind !== 'person'}
+        <textarea bind:this={notesEl} class="notes-input" rows="1" use:autosize bind:value={notesDraft} onkeydown={onNotesKey} onblur={onBlurEditor} placeholder="Notes, links, - bullets"></textarea>
+      {/if}
+    {:else}
+      <div class="title">{#if done}<span class="check">✓</span> {/if}{card.title || '(untitled)'}</div>
+      {#if card.notes && card.kind !== 'person'}
+        <div class="notes-preview">
+          <NotesView text={card.notes} clamp={popup ? 0 : 4} />
+        </div>
+      {:else if popup && card.kind !== 'person'}
+        <div class="notes-empty">click to add notes</div>
+      {/if}
     {/if}
-    {#if parent && showParent}
-      <button class="parent-chip" title="Part of: {parent.title}" onclick={() => store.focus(parent.id)}><span class="arrow">↰</span> {parent.title}</button>
+
+    {#if card.kind === 'person'}
+      <div class="discuss">{openKids.length + mentions.length} to discuss</div>
     {/if}
-    {#if card.parentId && card.bucketId && bucket && showParent === false}
-      <span class="sched-chip">{bucket.name}</span>
+
+    {#if card.kind !== 'person' && (selected || popup || card.effort != null || card.value != null || card.tags.length || card.peopleIds.length)}
+      <div class="foot">
+        <Chips {card} editable={(selected || popup) && !done} />
+      </div>
     {/if}
+
+    {#if !popup}
+      <div class="links">
+        {#if kids.length && card.kind !== 'person'}
+          <button class="kids" title="Open sub-todos" onclick={() => store.focus(card.id)}>
+            <span class="arrow">↴</span> {kids.length - openKids.length}/{kids.length}
+          </button>
+        {/if}
+        {#if parent && showParent}
+          <button class="parent-chip" title="Part of: {parent.title}" onclick={() => store.focus(parent.id)}><span class="arrow">↰</span> {parent.title}</button>
+        {/if}
+        {#if card.parentId && card.bucketId && bucket && showParent === false}
+          <span class="sched-chip">{bucket.name}</span>
+        {/if}
+      </div>
+    {/if}
+    {#if clipped}<div class="clip-fade" title="More inside, double-click to open">⋯</div>{/if}
   </div>
 
-  {#if !done}
+  {#if !done && !popup}
     <button
       class="add-child"
       title={card.kind === 'person' ? 'Add agenda item' : 'Add sub-todo'}
@@ -235,8 +270,6 @@
       }}>+</button
     >
   {/if}
-
-  {#if clipped}<div class="clip-fade" title="More inside, double-click to open">⋯</div>{/if}
 
   {#if stale >= 2}
     <svg class="cracks" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
@@ -256,8 +289,6 @@
     position: absolute;
     width: 150px;
     min-height: 60px;
-    max-height: 210px;
-    overflow: hidden;
     padding: 8px 9px 8px;
     background: var(--paper-custom, var(--paper-now));
     color: #2b2418;
@@ -276,12 +307,26 @@
       scale 140ms var(--ease-out);
     will-change: transform;
   }
+  .content {
+    position: relative;
+    max-height: 172px;
+    overflow: hidden;
+  }
   .card.fresh {
     animation: pop-in 220ms var(--ease-snap);
   }
   .card.layout-flow {
     position: relative;
     flex: 0 0 auto;
+  }
+  .card.popup {
+    width: 100%;
+    cursor: text;
+    padding: 12px 14px;
+  }
+  .card.popup .content {
+    max-height: none;
+    overflow: visible;
   }
   .card.stale-1 {
     --paper-now: var(--paper-stale-1);
@@ -306,7 +351,9 @@
     --paper-now: #ecf7ea;
     opacity: 0.9;
     border-color: rgba(43, 36, 24, 0.55);
-    max-height: 92px;
+  }
+  .card.done .content {
+    max-height: 60px;
   }
   .card.done .title {
     color: #4b5d48;
@@ -315,7 +362,7 @@
     color: #2f9a3a;
     font-weight: 900;
   }
-  .card:hover {
+  .card:not(.popup):hover {
     transform: rotate(0deg) translateY(-1px);
     box-shadow: 4px 4px 0 var(--shadow);
     z-index: 5;
@@ -326,13 +373,16 @@
     outline-offset: 2px;
     z-index: 6;
   }
-  .card.editing {
+  .card.editing:not(.popup) {
     cursor: text;
     width: 220px;
-    max-height: none;
     z-index: 8;
   }
-    /* :global so Svelte doesn't prune the selector (the attribute is set by the drag action, not the template). */
+  .card.editing .content {
+    max-height: none;
+    overflow: visible;
+  }
+  /* :global so Svelte doesn't prune the selector (the attribute is set by the drag action, not the template). */
   .card:global([data-drag='dragging']) {
     z-index: 100 !important;
     cursor: grabbing;
@@ -383,6 +433,7 @@
     width: 5px;
     background: var(--cluster);
     pointer-events: none;
+    border-radius: 3px 0 0 3px;
   }
 
   .pin {
@@ -405,11 +456,32 @@
     word-break: break-word;
     white-space: pre-wrap;
   }
+  .popup .title {
+    font-size: 16px;
+  }
   .kind-person .title {
     font-size: 14px;
   }
+  .popup.kind-person .title {
+    font-size: 18px;
+  }
   .notes-preview {
     margin-top: 4px;
+  }
+  .popup .notes-preview {
+    margin-top: 8px;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .popup .notes-preview :global(.notes) {
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .notes-empty {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #a2957f;
+    font-style: italic;
   }
   .title-input,
   .notes-input {
@@ -425,6 +497,10 @@
     font-weight: 650;
     font-size: 12.5px;
     line-height: 1.25;
+    color: #2b2418;
+  }
+  .popup .title-input {
+    font-size: 16px;
   }
   .notes-input {
     margin-top: 5px;
@@ -433,8 +509,17 @@
     color: #4b4232;
     border-bottom: 0;
   }
+  .popup .notes-input {
+    font-size: 13px;
+    line-height: 1.4;
+    max-height: 260px;
+    overflow-y: auto;
+  }
   .foot {
     margin-top: 6px;
+  }
+  .popup .foot {
+    margin-top: 10px;
   }
   .discuss {
     margin-top: 6px;
@@ -454,6 +539,7 @@
     gap: 3px;
     opacity: 0;
     transition: opacity 100ms;
+    z-index: 2;
   }
   .card:hover .tools,
   .card.selected .tools {
@@ -565,6 +651,7 @@
     transition:
       opacity 100ms,
       transform 140ms var(--ease-snap);
+    z-index: 2;
   }
   .card:hover .add-child,
   .card.selected .add-child {
@@ -586,7 +673,7 @@
     text-align: center;
     font-weight: 900;
     line-height: 30px;
-    color: var(--ink-soft);
+    color: #6b5f4d;
     pointer-events: none;
   }
 

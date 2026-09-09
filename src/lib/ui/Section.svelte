@@ -177,8 +177,8 @@
     padding: 1px 4px;
     border: 1.5px solid var(--ink);
     border-radius: 4px;
-    background: #fff;
-    color: #2b2418;
+    background: var(--field);
+    color: var(--field-ink);
   }
   .count {
     font-family: var(--font-mono);

@@ -24,6 +24,12 @@
   --paper-stale-3: #dcc277;
   --shadow: #2b2418;
 
+  /* inputs */
+  --field: #ffffff;
+  --field-ink: #2b2418;
+  --field-line: rgba(43, 36, 24, 0.35);
+  --btn-hover: #ffffff;
+
   /* accents */
   --accent: #ff6b4a;
   --accent-2: #4a9bff;
@@ -47,15 +53,19 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #1f1b16;
-    --bg-grid: rgba(255, 240, 200, 0.05);
+    --bg: #322c25;
+    --bg-grid: rgba(255, 240, 200, 0.07);
     --ink: #f2ead8;
-    --ink-soft: #bfb39c;
-    --ink-faint: #7c715d;
-    --line: #0d0b08;
-    --tray: rgba(255, 245, 220, 0.05);
-    --tray-line: rgba(242, 234, 216, 0.3);
-    --tray-hover: rgba(255, 220, 130, 0.12);
+    --ink-soft: #c9bda5;
+    --ink-faint: #8f8470;
+    --line: #14110d;
+    --tray: rgba(255, 245, 220, 0.06);
+    --tray-line: rgba(242, 234, 216, 0.32);
+    --tray-hover: rgba(255, 220, 130, 0.14);
+    --field: #3f3830;
+    --field-ink: #f2ead8;
+    --field-line: rgba(242, 234, 216, 0.35);
+    --btn-hover: #fff3c9;
     --paper: #f7e7a1;
     --paper-2: #ecd57f;
     --paper-person: #bcd6f5;
@@ -69,15 +79,19 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #1f1b16;
-  --bg-grid: rgba(255, 240, 200, 0.05);
+  --bg: #322c25;
+  --bg-grid: rgba(255, 240, 200, 0.07);
   --ink: #f2ead8;
-  --ink-soft: #bfb39c;
-  --ink-faint: #7c715d;
-  --line: #0d0b08;
-  --tray: rgba(255, 245, 220, 0.05);
-  --tray-line: rgba(242, 234, 216, 0.3);
-  --tray-hover: rgba(255, 220, 130, 0.12);
+  --ink-soft: #c9bda5;
+  --ink-faint: #8f8470;
+  --line: #14110d;
+  --tray: rgba(255, 245, 220, 0.06);
+  --tray-line: rgba(242, 234, 216, 0.32);
+  --tray-hover: rgba(255, 220, 130, 0.14);
+  --field: #3f3830;
+  --field-ink: #f2ead8;
+  --field-line: rgba(242, 234, 216, 0.35);
+  --btn-hover: #fff3c9;
   --paper: #f7e7a1;
   --paper-2: #ecd57f;
   --paper-person: #bcd6f5;

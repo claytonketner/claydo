@@ -59,8 +59,8 @@ export function trackDrag(e: PointerEvent, node: HTMLElement) {
   const dragged = dnd.draggingId;
   for (const el of document.querySelectorAll<HTMLElement>('[data-card]')) {
     if (el === node || node.contains(el) || el.contains(node)) continue;
-    if (dnd.peek && el.closest('.popup')) continue;
-    if (!dnd.peek && document.querySelector('.popup') && !el.closest('.popup')) continue;
+    if (dnd.peek && el.closest('.stage')) continue;
+    if (!dnd.peek && document.querySelector('.stage') && !el.closest('.layer.top')) continue;
     const id = el.dataset.card!;
     if (!id || id === dragged) continue;
     const r = rectOf(el);
@@ -119,11 +119,13 @@ export function resolveDrop(cardId: string, node: HTMLElement, pos: { x: number;
   if (dnd.intent === 'nest' && target) {
     if (store.nest(cardId, target.id)) {
       store.showToast(`Nested under "${target.title || 'card'}"`, () => store.undo());
+      store.focus(target.id);
       return;
     }
   }
 
-  // 2. Un-nesting from the popup while peeking at the board
+  // 2. Un-nesting from the popup while peeking at the board. Once the popup has
+  //    stepped aside it stays closed whatever happens.
   if (peek) {
     if (key?.startsWith('bucket:')) {
       const bucketId = key.slice(7);
@@ -131,11 +133,10 @@ export function resolveDrop(cardId: string, node: HTMLElement, pos: { x: number;
       if (bucket && bucket.kind !== 'done' && bucket.kind !== 'people') {
         const trayEl = elementUnder(e, `[data-drop="${key}"]`, node);
         store.unnestTo(cardId, bucketId, trayEl ? relativePos(node, trayEl) : undefined);
-        store.clearFocus();
-        store.selectedId = cardId;
         store.showToast('Pulled out onto the board', () => store.undo());
       }
     }
+    store.clearFocus();
     return;
   }
 

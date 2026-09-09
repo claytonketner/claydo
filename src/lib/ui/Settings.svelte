@@ -52,7 +52,7 @@
       <div class="cols">
         <section>
           <h3>Timeframes</h3>
-          <p class="help">Budget is in effort points: XS 1 · S 2 · M 4 · L 8 · XL 16. Unsized cards count {s.defaultEffortPoints}.</p>
+          <p class="help">Budget is in effort points: XS 1 · S 2 · M 4 · L 8 · XL 16. Unsized cards count {s.defaultEffortPoints}. Leave blank for no limit.</p>
           {#each store.timeBuckets as b, i (b.id)}
             <div class="row">
               <input class="name" value={b.name} onchange={(e) => store.updateBucket(b.id, { name: (e.target as HTMLInputElement).value })} />
@@ -252,10 +252,10 @@
   input:not([type='checkbox']),
   select {
     padding: 4px 6px;
-    border: 1.5px solid var(--tray-line);
+    border: 1.5px solid var(--field-line);
     border-radius: 4px;
-    background: #fff;
-    color: #2b2418;
+    background: var(--field);
+    color: var(--field-ink);
     font-size: 13px;
   }
   input:focus,

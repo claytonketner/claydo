@@ -43,7 +43,8 @@ slowly yellow and then crack as they age from their creation date.
 **The popup.** Double-click any card for the full view: title, scrollable
 notes, effort, value, timeframe, tags, people (with a jump to that person's
 popup), and its sub-todos in mini-trays. Open a sub-todo from inside and the
-parent stacks up behind it like a thrown-down flash card; click it to go back.
+parent's popup stacks up behind it like a thrown-down card; close the top one
+and the next straightens up. Click the backdrop to close them all.
 Drag a sub-todo out of the popup and hold for a moment: the popup steps aside
 so you can drop it anywhere on the board, which un-nests it.
 
@@ -72,9 +73,9 @@ ones down. Slide them sideways to tidy up, or drag one back up to reopen it.
 effort, value, a value × effort matrix, person, tag, or age. Dragging a card
 into a column sets that attribute.
 
-**Capacity.** Each timeframe has a budget in effort points (click the meter to
-change it). Unsized cards count for 2. It goes amber at 70 %, red and wobbly
-past 100 %.
+**Capacity.** Each timeframe has a budget in effort points (set in ⚙ Settings).
+Unsized cards count for 2. It goes amber at 70 % and red past 100 %. Cracked
+old cards have a "Like new" button in their popup.
 
 **Reflect ✦** in the Done strip shows what you finished this week / month /
 quarter / year, as a brick wall, a heatmap, and a copyable Markdown list.

@@ -10,24 +10,30 @@ export const ui = $state({
 /** Live rendered heights of cards, keyed by id, so free-layout trays can grow to fit. */
 export const cardHeights = $state<Record<string, number>>({});
 
-/** Action: report this element's height into `cardHeights`. */
-export function measureCard(node: HTMLElement, id: string) {
+/**
+ * Action: report this element's height into `cardHeights`. Pass null to opt
+ * out (popup / flow copies of a card must not overwrite or clear the board
+ * instance's entry, since trays size themselves from it).
+ */
+export function measureCard(node: HTMLElement, id: string | null) {
   let cur = id;
-  const report = () => (cardHeights[cur] = node.offsetHeight);
+  const report = () => {
+    if (cur) cardHeights[cur] = node.offsetHeight;
+  };
   report();
   const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(report) : null;
   ro?.observe(node);
   return {
-    update(next: string) {
+    update(next: string | null) {
       if (next !== cur) {
-        delete cardHeights[cur];
+        if (cur) delete cardHeights[cur];
         cur = next;
         report();
       }
     },
     destroy() {
       ro?.disconnect();
-      delete cardHeights[cur];
+      if (cur) delete cardHeights[cur];
     }
   };
 }

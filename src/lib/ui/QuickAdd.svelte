@@ -69,9 +69,9 @@
     flex: 1 1 320px;
     min-width: 220px;
     max-width: 720px;
-    padding: 6px 10px;
-    background: #fff;
-    color: #2b2418;
+    padding: 8px 10px;
+    background: var(--field);
+    color: var(--field-ink);
     transition: box-shadow 120ms var(--ease-out);
   }
   .quick.focused {
