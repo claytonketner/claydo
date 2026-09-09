@@ -7,7 +7,7 @@ import { CARD_H, CARD_W, type Bucket, type Card, type Doc, type Effort, type Id,
 import { loadDoc, saveDailySnapshot, saveDoc } from '../persist/db';
 import { downloadJson, mergeDocs } from '../persist/backup';
 import { captureRects, centerOf, flyFrom } from '../physics/fx';
-import { folderPermission, forgetBackupFolder, loadBackupFolder, pickBackupFolder, reconnectBackupFolder, supportsFolderBackup, writeFolderBackup, type DirHandle } from '../persist/folder';
+import { folderPermission, forgetBackupFolder, listBackupFiles, loadBackupFolder, pickBackupFolder, reconnectBackupFolder, supportsFolderBackup, writeFolderBackup, type BackupFileInfo, type DirHandle } from '../persist/folder';
 import { tick } from 'svelte';
 
 const SAVE_DEBOUNCE_MS = 300;
@@ -136,9 +136,9 @@ export class Store {
   }
 
   /** Let the user pick (or change) the backup folder. Must run from a click. */
-  async chooseFolder(): Promise<void> {
+  async chooseFolder(mode: 'quick' | 'pick' = 'pick'): Promise<void> {
     try {
-      const h = await pickBackupFolder();
+      const h = await pickBackupFolder(mode);
       if (!h) return;
       this.folderHandle = h;
       this.backup.folder = { name: h.name || 'backup folder', state: 'ok' };
@@ -161,6 +161,23 @@ export class Store {
       await this.maybeAutoBackup(true);
       this.showToast('Backup folder reconnected');
     } else this.showToast('Folder access was not granted');
+  }
+
+  /** Write a backup right now (folder if set, otherwise a download). */
+  async backupNow(): Promise<void> {
+    await this.maybeAutoBackup(true);
+    if (this.backup.folder?.state === 'ok' && !this.backup.lastError) this.showToast(`Backed up to "${this.backup.folder.name}"`);
+    else if (!this.backup.folder) this.showToast('Backup downloaded');
+  }
+
+  /** Files in the backup folder, for the listing in Settings. */
+  async backupFiles(): Promise<BackupFileInfo[]> {
+    if (!this.folderHandle || this.backup.folder?.state !== 'ok') return [];
+    try {
+      return await listBackupFiles(this.folderHandle);
+    } catch {
+      return [];
+    }
   }
 
   async forgetFolder(): Promise<void> {

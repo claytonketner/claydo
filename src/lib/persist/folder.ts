@@ -15,11 +15,13 @@ interface DirHandle {
   queryPermission(opts: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
   requestPermission(opts: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
   getFileHandle(name: string, opts?: { create?: boolean }): Promise<FileHandle>;
+  getDirectoryHandle(name: string, opts?: { create?: boolean }): Promise<DirHandle>;
   removeEntry(name: string): Promise<void>;
   values(): AsyncIterable<{ kind: string; name: string }>;
 }
 interface FileHandle {
   createWritable(): Promise<{ write(data: string): Promise<void>; close(): Promise<void> }>;
+  getFile(): Promise<File>;
 }
 type PickerWindow = Window & { showDirectoryPicker?: (opts?: { id?: string; mode?: 'read' | 'readwrite'; startIn?: string }) => Promise<DirHandle> };
 
@@ -32,17 +34,47 @@ export function supportsFolderBackup(): boolean {
   return typeof window !== 'undefined' && typeof (window as PickerWindow).showDirectoryPicker === 'function';
 }
 
-export async function pickBackupFolder(): Promise<DirHandle | null> {
+export const QUICK_FOLDER_NAME = 'claydo_backups';
+
+/**
+ * Let the user pick a folder. In `quick` mode the picker opens at the OS
+ * Documents folder and we create a `claydo_backups` folder inside whatever
+ * they confirm, so the default is one click.
+ */
+export async function pickBackupFolder(mode: 'quick' | 'pick' = 'pick'): Promise<DirHandle | null> {
   const w = window as PickerWindow;
   if (!w.showDirectoryPicker) return null;
   try {
-    const handle = await w.showDirectoryPicker({ id: 'claydo-backups', mode: 'readwrite', startIn: 'documents' });
+    let handle = await w.showDirectoryPicker({ id: mode === 'quick' ? 'claydo-quick' : 'claydo-backups', mode: 'readwrite', startIn: 'documents' });
+    if (mode === 'quick' && handle.name !== QUICK_FOLDER_NAME) handle = await handle.getDirectoryHandle(QUICK_FOLDER_NAME, { create: true });
     await set(KEY, handle, meta);
     return handle;
   } catch (e) {
     if ((e as DOMException).name === 'AbortError') return null;
     throw e;
   }
+}
+
+export interface BackupFileInfo {
+  name: string;
+  size: number;
+  modified: number;
+}
+
+/** The claydo backup files currently in the folder, newest first. */
+export async function listBackupFiles(handle: DirHandle): Promise<BackupFileInfo[]> {
+  const out: BackupFileInfo[] = [];
+  for await (const entry of handle.values()) {
+    if (entry.kind !== 'file' || !/^claydo-.*\.json$/.test(entry.name)) continue;
+    try {
+      const fh = await handle.getFileHandle(entry.name);
+      const f = await fh.getFile();
+      out.push({ name: entry.name, size: f.size, modified: f.lastModified });
+    } catch {
+      /* skip unreadable */
+    }
+  }
+  return out.sort((a, b) => b.modified - a.modified);
 }
 
 export async function loadBackupFolder(): Promise<DirHandle | null> {

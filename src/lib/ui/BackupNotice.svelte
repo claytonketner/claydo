@@ -33,16 +33,20 @@
         <button class="btn sm" onclick={() => store.reconnectFolder()}>Reconnect</button>
       </div>
     {:else}
-      <p>Your board lives only in this browser. Pick somewhere safe for automatic copies.</p>
+      <p>Your board is stored only in this browser. If its site data is ever cleared, the board is gone. A backup folder fixes that.</p>
       <div class="actions">
         {#if store.backup.supported}
-          <button class="btn sm" onclick={() => store.chooseFolder()}>Choose a folder…</button>
+          <button class="btn sm" onclick={() => store.chooseFolder('quick')}>Quick setup</button>
+          <button class="btn sm" onclick={() => store.chooseFolder('pick')}>Choose a folder…</button>
+        {:else}
+          <button class="btn sm" onclick={() => store.acknowledgeBackups('download')}>Download daily</button>
         {/if}
-        <button class="btn sm" onclick={() => store.acknowledgeBackups('download')}>{store.backup.supported ? 'Just download daily' : 'Download daily'}</button>
         <button class="btn ghost sm" onclick={later}>Later</button>
       </div>
-      {#if !store.backup.supported}
-        <p class="fine">This browser can't write to a folder; Chrome or Edge can.</p>
+      {#if store.backup.supported}
+        <p class="fine">Quick setup makes a <b>claydo_backups</b> folder in Documents. For extra safety choose a folder that syncs to the cloud instead.</p>
+      {:else}
+        <p class="fine">This browser can't write to a folder (Chrome and Edge can), so it downloads a backup file once a day instead.</p>
       {/if}
     {/if}
   </div>

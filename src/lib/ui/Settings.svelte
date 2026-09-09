@@ -4,12 +4,20 @@
   import { downloadJson, parseDocJson } from '../persist/backup';
   import { listSnapshots, loadSnapshot, type SnapshotMeta } from '../persist/db';
   import Icon from './Icon.svelte';
+  import type { BackupFileInfo } from '../persist/folder';
 
   let snapshots = $state<SnapshotMeta[]>([]);
   let importMode = $state<'merge' | 'replace'>('merge');
   let fileInput = $state<HTMLInputElement | null>(null);
   let newBucket = $state('');
   let confirmClear = $state(false);
+  let showFiles = $state(false);
+  let files = $state<BackupFileInfo[]>([]);
+
+  async function toggleFiles() {
+    showFiles = !showFiles;
+    if (showFiles) files = await store.backupFiles();
+  }
 
   $effect(() => {
     if (store.settingsOpen) void listSnapshots().then((s) => (snapshots = s));
@@ -116,45 +124,66 @@
 
         <section>
           <h3>Backup</h3>
-          <p class="help">Your board lives in this browser. Automatic copies go somewhere safer.</p>
+          <p class="help">Your board is stored in this browser. If the browser's site data gets cleared, it's gone. A backup folder keeps a copy safe.</p>
           {#if store.backup.supported}
             {#if store.backup.folder}
               <div class="row folder" class:warn={store.backup.folder.state === 'needs-permission'}>
-                <span class="mono fname"><Icon name="folder" size={16} /> {store.backup.folder.name}</span>
+                <button class="fname" title="Show the files in this folder" onclick={toggleFiles}><Icon name="folder" size={16} /> {store.backup.folder.name}</button>
                 {#if store.backup.folder.state === 'ok'}
-                  <span class="help">hourly, silent</span>
+                  <span class="help">backs up every hour</span>
                 {:else}
                   <button class="btn sm" onclick={() => store.reconnectFolder()}>Reconnect</button>
-                  <span class="help">access lapsed since the browser restarted</span>
+                  <span class="help">the browser needs you to re-allow access</span>
                 {/if}
                 <span class="spacer"></span>
-                <button class="btn ghost sm" onclick={() => store.chooseFolder()}>change</button>
+                {#if store.backup.folder.state === 'ok'}<button class="btn sm" onclick={() => store.backupNow()}>Backup now</button>{/if}
+                <button class="btn ghost sm" onclick={() => store.chooseFolder('pick')}>change</button>
                 <button class="btn ghost sm" onclick={() => store.forgetFolder()}>disconnect</button>
               </div>
-              <p class="help">Writes <code>claydo-latest.json</code> plus one dated file per day (kept 60 days). Point it at iCloud Drive, Dropbox or OneDrive to get it off this machine.{#if store.backup.lastError} Last error: {store.backup.lastError}.{/if}</p>
+              {#if showFiles}
+                <div class="files">
+                  {#if files.length === 0}
+                    <span class="help">No backup files yet.</span>
+                  {:else}
+                    {#each files as f (f.name)}
+                      <div class="file"><span class="mono">{f.name}</span><span class="help">{new Date(f.modified).toLocaleString()} · {Math.max(1, Math.round(f.size / 1024))} KB</span></div>
+                    {/each}
+                  {/if}
+                  <p class="help">A web page can't open Finder or Explorer for you; find the folder by name in your file browser.</p>
+                </div>
+              {/if}
+              {#if store.backup.lastError}<p class="help">Last error: {store.backup.lastError}</p>{/if}
             {:else}
               <div class="row">
-                <button class="btn" onclick={() => store.chooseFolder()}>Choose backup folder…</button>
-                <span class="help">silent hourly copies, no downloads</span>
+                <button class="btn" onclick={() => store.chooseFolder('quick')}>Quick setup</button>
+                <span class="help">makes a <b>claydo_backups</b> folder in Documents</span>
+              </div>
+              <div class="row">
+                <button class="btn" onclick={() => store.chooseFolder('pick')}>Choose a folder…</button>
+                <span class="help">for extra safety, pick one that syncs to the cloud</span>
               </div>
             {/if}
           {:else}
-            <p class="help">This browser can't write into a folder (Chrome and Edge can), so backups are downloads.</p>
+            <p class="help">This browser can't write to a folder (Chrome and Edge can), so a backup file downloads once a day instead.</p>
           {/if}
           {#if !store.backup.folder || store.backup.folder.state !== 'ok'}
             <label class="row">
               <input type="checkbox" checked={s.autoBackup} onchange={(e) => store.acknowledgeBackups((e.target as HTMLInputElement).checked ? 'download' : 'off')} />
-              <span>Download a backup once a day while the app is open</span>
+              <span>Download a backup file once a day</span>
             </label>
-            <p class="help">Only when something changed. Lands in your browser's Downloads folder as <code>claydo-YYYYMMDD-HHMM.json</code>.{#if s.autoBackup && !s.backupAcknowledged} Nothing downloads until you confirm this here or in the corner notice.{/if}</p>
           {/if}
           {#if s.lastBackupAt}<p class="help">Last backup {new Date(s.lastBackupAt).toLocaleString()}.</p>{/if}
+
+          <h3>Share and restore</h3>
           <div class="row">
-            <button class="btn" onclick={() => downloadJson(store.doc)}>Export JSON</button>
-            <button class="btn" onclick={() => fileInput?.click()}>Import JSON…</button>
+            <button class="btn" onclick={() => downloadJson(store.doc)}>Export share file</button>
+            <span class="help">a copy of the board to send to someone</span>
+          </div>
+          <div class="row">
+            <button class="btn" onclick={() => fileInput?.click()}>Restore from backup…</button>
             <select bind:value={importMode}>
-              <option value="merge">merge into board</option>
-              <option value="replace">replace board</option>
+              <option value="merge">add to this board</option>
+              <option value="replace">replace this board</option>
             </select>
             <input bind:this={fileInput} type="file" accept="application/json,.json" hidden onchange={onFile} />
           </div>
@@ -307,11 +336,36 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    border: 0;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .fname:hover {
+    text-decoration: underline;
+  }
+  .files {
+    margin: 4px 0 8px 8px;
+    padding-left: 10px;
+    border-left: 2px dashed var(--tray-line);
+  }
+  .file {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    font-size: 12px;
+    padding: 1px 0;
   }
   .folder {
     padding: 6px 8px;
     border: 1.5px dashed var(--tray-line);
     border-radius: 6px;
+  }
+  .folder .help {
+    white-space: nowrap;
   }
   .folder.warn {
     border-color: var(--warn);
