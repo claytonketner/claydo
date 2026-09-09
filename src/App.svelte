@@ -9,6 +9,7 @@
   import QuickAdd from './lib/ui/QuickAdd.svelte';
   import Settings from './lib/ui/Settings.svelte';
   import Trash from './lib/ui/Trash.svelte';
+  import Icon from './lib/ui/Icon.svelte';
   import Toast from './lib/ui/Toast.svelte';
   import ViewSwitcher from './lib/ui/ViewSwitcher.svelte';
   import Reflect from './lib/ui/Reflect.svelte';
@@ -188,12 +189,12 @@
         {#if store.search}<button class="clear" onclick={() => (store.search = '')}>✕</button>{:else}<span class="kbd">/</span>{/if}
       </div>
       <div class="history">
-        <button class="btn icon" disabled={!store.canUndo} title="Undo (⌘Z)" onclick={() => store.undo()}>↶</button>
-        <button class="btn icon" disabled={!store.canRedo} title="Redo (⇧⌘Z)" onclick={() => store.redo()}>↷</button>
+        <button class="btn icon" disabled={!store.canUndo} title="Undo (⌘Z)" onclick={() => store.undo()}><Icon name="undo" /></button>
+        <button class="btn icon" disabled={!store.canRedo} title="Redo (⇧⌘Z)" onclick={() => store.redo()}><Icon name="redo" /></button>
         <button class="btn icon trash" title="Trash" onclick={() => (store.trashOpen = true)}>
-          🗑{#if store.trash.length}<span class="badge">{store.trash.length}</span>{/if}
+          <Icon name="trash" />{#if store.trash.length}<span class="badge">{store.trash.length}</span>{/if}
         </button>
-        <button class="btn icon" title="Settings" onclick={() => (store.settingsOpen = true)}>⚙</button>
+        <button class="btn icon" title="Settings" onclick={() => (store.settingsOpen = true)}><Icon name="gear" /></button>
       </div>
     </header>
     <div class="viewbar">

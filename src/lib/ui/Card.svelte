@@ -26,6 +26,9 @@
   }
   let { card, layout = 'free', dropKey = null, maxX = Infinity, y = null, showParent = true, popup = false }: Props = $props();
 
+  /** How many child mini-cards fit along the bottom edge before we show an ellipsis. */
+  const MAX_MINIS = 5;
+
   let node: HTMLElement;
   let clipped = $state(false);
   let localEditing = $state(false);
@@ -180,6 +183,7 @@
   class:group-target={groupTarget}
   class:nest-target={nestTarget}
   class:clustered={!!cluster}
+  class:has-kids={kids.length > 0 && card.kind !== 'person' && !popup}
   style:--rot="{rot}deg"
   style:--cluster={cluster?.color ?? undefined}
   style:left={layout === 'free' ? `${x}px` : undefined}
@@ -244,11 +248,6 @@
 
     {#if !popup}
       <div class="links">
-        {#if kids.length && card.kind !== 'person'}
-          <button class="kids" title="Open sub-todos" onclick={() => store.focus(card.id)}>
-            <span class="arrow">↴</span> {kids.length - openKids.length}/{kids.length}
-          </button>
-        {/if}
         {#if parent && showParent}
           <button class="parent-chip" title="Part of: {parent.title}" onclick={() => store.focus(parent.id)}><span class="arrow">↰</span> {parent.title}</button>
         {/if}
@@ -259,6 +258,15 @@
     {/if}
     {#if clipped}<div class="clip-fade" title="More inside, double-click to open">⋯</div>{/if}
   </div>
+
+  {#if kids.length && card.kind !== 'person' && !popup}
+    <div class="minis" title="{openKids.length} open · {kids.length - openKids.length} done — double-click to open">
+      {#each (kids.length > MAX_MINIS ? kids.slice(0, MAX_MINIS - 1) : kids) as k (k.id)}
+        <span class="mini" class:mini-done={k.doneAt != null} class:mini-idea={k.kind === 'idea'}></span>
+      {/each}
+      {#if kids.length > MAX_MINIS}<span class="mini more">…</span>{/if}
+    </div>
+  {/if}
 
   {#if !done && !popup}
     <button
@@ -585,22 +593,43 @@
     font-size: 12px;
     line-height: 1;
   }
-  .kids {
+  .card.has-kids {
+    padding-bottom: 12px;
+  }
+  .minis {
+    position: absolute;
+    left: 8px;
+    bottom: -7px;
+    display: flex;
+    gap: 3px;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .mini {
+    width: 22px;
+    height: 13px;
     border: 1.5px solid var(--line);
-    border-radius: 4px;
+    border-radius: 3px;
+    background: var(--paper);
+    box-shadow: 1px 1px 0 var(--shadow);
+  }
+  .mini-done {
+    background: #cfeecd;
+  }
+  .mini-idea {
+    background: var(--paper-idea);
+    border-style: dashed;
+  }
+  .mini.more {
+    width: auto;
+    min-width: 16px;
+    padding: 0 3px;
     background: #2b2418;
     color: var(--paper);
-    font-family: var(--font-mono);
     font-size: 10px;
-    padding: 2px 6px;
-    cursor: pointer;
-    display: inline-flex;
-    gap: 3px;
-    align-items: center;
-  }
-  .kids:hover {
-    background: var(--accent);
-    color: #fff;
+    line-height: 10px;
+    font-weight: 900;
+    text-align: center;
   }
   .parent-chip {
     max-width: 100%;
@@ -631,11 +660,10 @@
 
   .add-child {
     position: absolute;
-    left: 50%;
-    bottom: -10px;
+    right: -8px;
+    bottom: -8px;
     width: 20px;
     height: 20px;
-    margin-left: -10px;
     border: 2px solid var(--line);
     border-radius: 50%;
     background: var(--paper);

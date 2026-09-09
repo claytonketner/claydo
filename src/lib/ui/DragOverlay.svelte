@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { dnd, GROUP_T, NEST_T } from './dnd.svelte';
+  import { dnd, NEST_T } from './dnd.svelte';
 
   /** Hull around the dragged card and its target, plus the GROUP / NEST label. */
   const hull = $derived.by(() => {
@@ -13,7 +13,7 @@
     const bottom = Math.max(a.top + a.height, b.top + b.height) + pad;
     return { left, top, width: right - left, height: bottom - top };
   });
-  const progress = $derived(Math.max(0, Math.min(1, (dnd.overlap - GROUP_T) / (NEST_T - GROUP_T))));
+  const progress = $derived(Math.max(0, Math.min(1, dnd.overlap / NEST_T)));
 </script>
 
 {#if dnd.draggingId && dnd.intent !== 'none' && hull && dnd.dragRect}

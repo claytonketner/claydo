@@ -1,5 +1,6 @@
 <script lang="ts">
   import { store, Store } from '../model/store.svelte';
+  import Icon from './Icon.svelte';
 
   let confirmEmpty = $state(false);
   const items = $derived(store.trash);
@@ -24,7 +25,7 @@
   <div class="backdrop" onclick={(e) => e.target === e.currentTarget && close()}>
     <div class="panel px" role="dialog" aria-label="Trash">
       <header>
-        <h2 class="display">🗑 Trash <span class="count">{items.length}</span></h2>
+        <h2 class="display"><Icon name="trash" size={18} /> Trash <span class="count">{items.length}</span></h2>
         <span class="spacer"></span>
         {#if items.length}
           {#if confirmEmpty}
@@ -89,6 +90,9 @@
   h2 {
     margin: 0;
     font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
   .count {
     font-family: var(--font-mono);

@@ -3,12 +3,18 @@
   import Masonry from './Masonry.svelte';
   import Section from './Section.svelte';
 
-  const packed = $derived(store.buckets.filter((b) => b.kind !== 'done'));
+  const timeBuckets = $derived(store.timeBuckets);
+  const sideBuckets = $derived(store.buckets.filter((b) => b.kind === 'people' || b.kind === 'ideas'));
   const doneBucket = $derived(store.buckets.find((b) => b.kind === 'done'));
 </script>
 
 <div class="board">
-  <Masonry buckets={packed} filter={store.search} />
+  <Masonry buckets={timeBuckets} filter={store.search} />
+  <div class="side-grid">
+    {#each sideBuckets as b (b.id)}
+      <Section bucket={b} filter={store.search} />
+    {/each}
+  </div>
   {#if doneBucket}
     <Section bucket={doneBucket} filter={store.search} />
   {/if}
@@ -20,5 +26,11 @@
     flex-direction: column;
     gap: 14px;
     padding: 12px 16px 40px;
+  }
+  .side-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+    gap: 14px;
+    align-items: start;
   }
 </style>

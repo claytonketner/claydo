@@ -49,13 +49,15 @@ Drag a sub-todo out of the popup and hold for a moment: the popup steps aside
 so you can drop it anywhere on the board, which un-nests it.
 
 **Drag.** Cards land exactly where you let go, with a little bounce. Drop one
-on a tray to move it. Slide it onto another card and they start to stick: a
-**GROUP** label and a hull appear at a light overlap, and a bar shows how much
-more overlap turns it into **NEST**. Cross that line and it pops. Grouped cards
+on a tray to move it; the tray opens up extra room below while you hover.
+After a drop, neighbours nudge aside so nothing overlaps, and groups move as
+one. Bring a card close to another and they start to stick: a **GROUP** label
+and a hull appear, and a bar shows how much overlap turns it into **NEST**. Cross that line and it pops. Grouped cards
 share a dashed hull and a colored edge; drag one away to leave the group. Hold
 ⌥ to just overlap with no grouping.
 
-**Sub-todos.** Press `F` (or click the `↴ n/m` chip) to open a card's popup.
+**Sub-todos.** A card with sub-todos shows little tabs along its bottom edge,
+one per child. Press `F` or double-click to open its popup.
 A sub-todo inherits its parent's timeframe unless you drop it on a tray of its
 own (or Ideas), in which case it also shows on the main board with an
 `↰ parent` chip. Finishing or deleting a card that has sub-todos asks whether

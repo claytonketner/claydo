@@ -250,6 +250,21 @@ export class Store {
     this.scheduleSave();
   }
 
+  /** Batch position update after a relayout (no history entry, like setPos). */
+  setPositions(changes: { id: Id; pos: { x: number; y: number } }[]): void {
+    let any = false;
+    for (const ch of changes) {
+      const c = this.byId.get(ch.id);
+      if (!c) continue;
+      const x = Math.max(0, Math.round(ch.pos.x));
+      const y = Math.max(0, Math.round(ch.pos.y));
+      if (c.pos.x === x && c.pos.y === y) continue;
+      c.pos = { x, y };
+      any = true;
+    }
+    if (any) this.scheduleSave();
+  }
+
   moveToBucket(id: Id, bucketId: Id, pos?: { x: number; y: number }): void {
     const c = this.byId.get(id);
     if (!c) return;

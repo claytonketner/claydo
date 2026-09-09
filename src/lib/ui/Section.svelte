@@ -20,14 +20,17 @@
     return all.filter((c) => c.title.toLowerCase().includes(q) || c.notes.toLowerCase().includes(q) || c.tags.some((t) => t.includes(q)));
   });
   const load = $derived(store.loads.get(bucket.id));
-  const over = $derived(dnd.overDropKey === dropKey && dnd.draggingId != null && dnd.intent === 'none');
+  const hovering = $derived(dnd.overDropKey === dropKey && dnd.draggingId != null);
+  const over = $derived(hovering && dnd.intent === 'none');
+  /** Extra room that opens up below the cards while something is being dragged over this tray. */
+  const extra = $derived(hovering ? 170 : 0);
   let bodyWidth = $state(600);
   const maxX = $derived(Math.max(0, bodyWidth - CARD_W - 8));
   $effect(() => {
     if (isDone) store.doneTrayWidth = bodyWidth;
   });
   const yOf = (c: CardT, i: number) => (isDone ? 16 + i * DONE_STEP : c.pos.y);
-  const height = $derived(Math.max(isDone ? 110 : 150, ...cards.map((c, i) => yOf(c, i) + (cardHeights[c.id] ?? CARD_H) + 30)));
+  const height = $derived(Math.max(isDone ? 110 : 150, ...cards.map((c, i) => yOf(c, i) + (cardHeights[c.id] ?? CARD_H) + 30)) + extra);
   const WEEK = 7 * 86_400_000;
   const doneThisWeek = $derived(isDone ? store.doneCards.filter((c) => Date.now() - c.doneAt! < WEEK).length : 0);
 

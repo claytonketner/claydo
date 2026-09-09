@@ -1,11 +1,21 @@
-import { CARD_W } from '../model/types';
+import { CARD_H, CARD_W } from '../model/types';
 import { store } from '../model/store.svelte';
 import { elementUnder, overlapRatio, type Rect } from '../physics/drag';
+import { cardHeights } from './ui.svelte';
 
-/** Overlap (fraction of the dragged card) at which the two start to "stick" as a group. */
-export const GROUP_T = 0.12;
-/** Overlap at which dropping nests instead. */
+/** Cards this close (px gap, or overlapping) "stick" together as a group. */
+export const GROUP_GAP = 22;
+/** Overlap (fraction of the dragged card) at which dropping nests instead. */
 export const NEST_T = 0.55;
+/** Breathing room the relayout keeps between cards that aren't grouped. */
+const SPACING = 12;
+
+/** Largest edge gap between two rects (0 when they overlap on both axes). */
+export function gapBetween(a: Rect, b: Rect): number {
+  const gx = Math.max(a.left, b.left) - Math.min(a.left + a.width, b.left + b.width);
+  const gy = Math.max(a.top, b.top) - Math.min(a.top + a.height, b.top + b.height);
+  return Math.max(0, gx, gy);
+}
 
 export type Intent = 'none' | 'group' | 'nest';
 
@@ -54,8 +64,8 @@ export function trackDrag(e: PointerEvent, node: HTMLElement) {
   const me = rectOf(node);
   dnd.dragRect = me;
 
-  // Nearest overlapping card (by area), among visible cards that aren't us or our descendants.
-  let best: { id: string; ratio: number; rect: Rect } | null = null;
+  // Closest card: most overlap first, otherwise the smallest edge gap.
+  let best: { id: string; ratio: number; gap: number; rect: Rect } | null = null;
   const dragged = dnd.draggingId;
   for (const el of document.querySelectorAll<HTMLElement>('[data-card]')) {
     if (el === node || node.contains(el) || el.contains(node)) continue;
@@ -65,14 +75,16 @@ export function trackDrag(e: PointerEvent, node: HTMLElement) {
     if (!id || id === dragged) continue;
     const r = rectOf(el);
     const ratio = overlapRatio(me, r);
-    if (ratio > 0 && (!best || ratio > best.ratio)) best = { id, ratio, rect: r };
+    const gap = gapBetween(me, r);
+    if (gap > GROUP_GAP) continue;
+    if (!best || ratio > best.ratio || (ratio === best.ratio && gap < best.gap)) best = { id, ratio, gap, rect: r };
   }
 
   const can = best && dragged ? capabilities(dragged, best.id) : null;
   let intent: Intent = 'none';
   if (best && can && !e.altKey) {
     if (best.ratio >= NEST_T && can.nest) intent = 'nest';
-    else if (best.ratio >= GROUP_T && (can.group || can.nest)) intent = 'group';
+    else if (can.group || can.nest) intent = 'group';
   }
   dnd.overCardId = intent === 'none' ? null : best!.id;
   dnd.overlap = best ? best.ratio : 0;
@@ -133,6 +145,7 @@ export function resolveDrop(cardId: string, node: HTMLElement, pos: { x: number;
       if (bucket && bucket.kind !== 'done' && bucket.kind !== 'people') {
         const trayEl = elementUnder(e, `[data-drop="${key}"]`, node);
         store.unnestTo(cardId, bucketId, trayEl ? relativePos(node, trayEl) : undefined);
+        relayoutTray(bucketId, cardId);
         store.showToast('Pulled out onto the board', () => store.undo());
       }
     }
@@ -149,6 +162,7 @@ export function resolveDrop(cardId: string, node: HTMLElement, pos: { x: number;
       store.setPos(cardId, card.doneAt != null ? { x: p.x, y: 0 } : p);
     }
     settleGrouping(cardId, target, dnd.intent);
+    if (ctx.free && card.doneAt == null && card.bucketId) relayoutTray(card.bucketId, cardId);
     return;
   }
 
@@ -175,6 +189,7 @@ export function resolveDrop(cardId: string, node: HTMLElement, pos: { x: number;
         store.moveToBucket(cardId, val, rel);
       }
       settleGrouping(cardId, target, dnd.intent);
+      if (rel) relayoutTray(val, cardId);
       return;
     }
     case 'inherit':
@@ -229,15 +244,115 @@ function settleGrouping(cardId: string, target: ReturnType<typeof store.card>, i
     const me = document.querySelector<HTMLElement>(`[data-card="${cardId}"]`);
     if (!me) return;
     const mine = rectOf(me);
-    const stillTouching = store
+    const stillClose = store
       .clusterMembers(card.clusterId)
       .filter((m) => m.id !== cardId)
       .some((m) => {
         const el = document.querySelector<HTMLElement>(`[data-card="${m.id}"]`);
-        return el && overlapRatio(mine, rectOf(el)) > 0.02;
+        return el && gapBetween(mine, rectOf(el)) <= GROUP_GAP * 2;
       });
-    if (!stillTouching) store.ungroup(cardId);
+    if (!stillClose) store.ungroup(cardId);
   }
+}
+
+/**
+ * After a drop, nudge the other cards on the tray so nothing sits on top of
+ * anything else (with a little spacing), while grouped cards move as one
+ * rigid body and the dropped card stays exactly where it was put.
+ */
+export function relayoutTray(bucketId: string, anchorId: string): void {
+  const trayEl = [...document.querySelectorAll<HTMLElement>(`[data-drop="bucket:${bucketId}"]`)].find((el) => !el.closest('.stage'));
+  if (!trayEl) return;
+  const trayW = trayEl.clientWidth;
+  const maxX = Math.max(0, trayW - CARD_W - 8);
+  const cards = store.cardsInBucket(bucketId).filter((c) => c.doneAt == null);
+  if (cards.length < 2) return;
+
+  interface Body {
+    ids: string[];
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    fixed: boolean;
+    offsets: { id: string; dx: number; dy: number }[];
+  }
+  const hOf = (id: string) => cardHeights[id] ?? CARD_H;
+  const byCluster = new Map<string, typeof cards>();
+  const singles: typeof cards = [];
+  for (const c of cards) {
+    if (c.clusterId) byCluster.set(c.clusterId, [...(byCluster.get(c.clusterId) ?? []), c]);
+    else singles.push(c);
+  }
+  const bodies: Body[] = [];
+  const mk = (members: typeof cards) => {
+    const x0 = Math.min(...members.map((m) => Math.min(m.pos.x, maxX)));
+    const y0 = Math.min(...members.map((m) => m.pos.y));
+    const x1 = Math.max(...members.map((m) => Math.min(m.pos.x, maxX) + CARD_W));
+    const y1 = Math.max(...members.map((m) => m.pos.y + hOf(m.id)));
+    bodies.push({
+      ids: members.map((m) => m.id),
+      x: x0,
+      y: y0,
+      w: x1 - x0,
+      h: y1 - y0,
+      fixed: members.some((m) => m.id === anchorId),
+      offsets: members.map((m) => ({ id: m.id, dx: Math.min(m.pos.x, maxX) - x0, dy: m.pos.y - y0 }))
+    });
+  };
+  for (const members of byCluster.values()) members.length > 1 ? mk(members) : singles.push(...members);
+  for (const c of singles) mk([c]);
+
+  // Greedy: keep the dropped body where it is, then settle the others nearest-first,
+  // each to the closest free spot to where it already was. No oscillation, and bodies
+  // that weren't in the way don't move at all.
+  const maxBodyX = (b: Body) => Math.max(0, trayW - 8 - b.w);
+  const collides = (b: Body, x: number, y: number, placed: Body[]) =>
+    placed.some((p) => Math.min(x + b.w, p.x + p.w) - Math.max(x, p.x) + SPACING > 0 && Math.min(y + b.h, p.y + p.h) - Math.max(y, p.y) + SPACING > 0);
+  const anchor = bodies.find((b) => b.fixed);
+  if (!anchor) return;
+  const ax = anchor.x + anchor.w / 2;
+  const ay = anchor.y + anchor.h / 2;
+  const placed: Body[] = [anchor];
+  const rest = bodies.filter((b) => !b.fixed).sort((p, q) => Math.hypot(p.x + p.w / 2 - ax, p.y + p.h / 2 - ay) - Math.hypot(q.x + q.w / 2 - ax, q.y + q.h / 2 - ay));
+  const dirs: [number, number][] = [];
+  for (let i = 0; i < 16; i++) dirs.push([Math.cos((i / 16) * Math.PI * 2), Math.sin((i / 16) * Math.PI * 2)]);
+  for (const b of rest) {
+    const ox = Math.min(maxBodyX(b), Math.max(0, b.x));
+    const oy = Math.max(0, b.y);
+    if (!collides(b, ox, oy, placed)) {
+      b.x = ox;
+      b.y = oy;
+      placed.push(b);
+      continue;
+    }
+    let found = false;
+    for (let r = 8; r <= 900 && !found; r += 8) {
+      for (const [dx, dy] of dirs) {
+        const x = Math.min(maxBodyX(b), Math.max(0, ox + dx * r));
+        const y = Math.max(0, oy + dy * r);
+        if (!collides(b, x, y, placed)) {
+          b.x = x;
+          b.y = y;
+          found = true;
+          break;
+        }
+      }
+    }
+    if (!found) {
+      // Worst case: drop it below everything.
+      b.x = ox;
+      b.y = Math.max(...placed.map((p) => p.y + p.h)) + SPACING;
+    }
+    placed.push(b);
+  }
+
+  const changes: { id: string; pos: { x: number; y: number } }[] = [];
+  for (const body of bodies) {
+    if (body.fixed) continue;
+    for (const o of body.offsets) changes.push({ id: o.id, pos: { x: Math.round(body.x + o.dx), y: Math.round(body.y + o.dy) } });
+  }
+  store.setPositions(changes);
 }
 
 function maxXFor(node: HTMLElement): number {
