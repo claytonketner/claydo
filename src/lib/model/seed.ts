@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoBackup: true,
   lastBackupAt: null,
   backupVersion: 2,
+  backupAcknowledged: false,
   celebrate: true,
   theme: 'system'
 };

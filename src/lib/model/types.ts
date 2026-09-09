@@ -63,6 +63,8 @@ export interface Settings {
   lastBackupAt: number | null;
   /** Bumped when backup defaults change, so existing boards pick up the new default once. */
   backupVersion?: number;
+  /** The user has made a deliberate backup choice (folder, downloads, or off). */
+  backupAcknowledged?: boolean;
   celebrate: boolean;
   theme: 'light' | 'dark' | 'system';
 }

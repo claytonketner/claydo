@@ -3,6 +3,7 @@
   import { emptyDoc, seedDoc } from '../model/seed';
   import { downloadJson, parseDocJson } from '../persist/backup';
   import { listSnapshots, loadSnapshot, type SnapshotMeta } from '../persist/db';
+  import Icon from './Icon.svelte';
 
   let snapshots = $state<SnapshotMeta[]>([]);
   let importMode = $state<'merge' | 'replace'>('merge');
@@ -115,7 +116,39 @@
 
         <section>
           <h3>Backup</h3>
-          <p class="help">Your board lives in this browser. Export a JSON file now and then, or turn on the daily backup.</p>
+          <p class="help">Your board lives in this browser. Automatic copies go somewhere safer.</p>
+          {#if store.backup.supported}
+            {#if store.backup.folder}
+              <div class="row folder" class:warn={store.backup.folder.state === 'needs-permission'}>
+                <span class="mono fname"><Icon name="folder" size={16} /> {store.backup.folder.name}</span>
+                {#if store.backup.folder.state === 'ok'}
+                  <span class="help">hourly, silent</span>
+                {:else}
+                  <button class="btn sm" onclick={() => store.reconnectFolder()}>Reconnect</button>
+                  <span class="help">access lapsed since the browser restarted</span>
+                {/if}
+                <span class="spacer"></span>
+                <button class="btn ghost sm" onclick={() => store.chooseFolder()}>change</button>
+                <button class="btn ghost sm" onclick={() => store.forgetFolder()}>disconnect</button>
+              </div>
+              <p class="help">Writes <code>claydo-latest.json</code> plus one dated file per day (kept 60 days). Point it at iCloud Drive, Dropbox or OneDrive to get it off this machine.{#if store.backup.lastError} Last error: {store.backup.lastError}.{/if}</p>
+            {:else}
+              <div class="row">
+                <button class="btn" onclick={() => store.chooseFolder()}>Choose backup folder…</button>
+                <span class="help">silent hourly copies, no downloads</span>
+              </div>
+            {/if}
+          {:else}
+            <p class="help">This browser can't write into a folder (Chrome and Edge can), so backups are downloads.</p>
+          {/if}
+          {#if !store.backup.folder || store.backup.folder.state !== 'ok'}
+            <label class="row">
+              <input type="checkbox" checked={s.autoBackup} onchange={(e) => store.acknowledgeBackups((e.target as HTMLInputElement).checked ? 'download' : 'off')} />
+              <span>Download a backup once a day while the app is open</span>
+            </label>
+            <p class="help">Only when something changed. Lands in your browser's Downloads folder as <code>claydo-YYYYMMDD-HHMM.json</code>.{#if s.autoBackup && !s.backupAcknowledged} Nothing downloads until you confirm this here or in the corner notice.{/if}</p>
+          {/if}
+          {#if s.lastBackupAt}<p class="help">Last backup {new Date(s.lastBackupAt).toLocaleString()}.</p>{/if}
           <div class="row">
             <button class="btn" onclick={() => downloadJson(store.doc)}>Export JSON</button>
             <button class="btn" onclick={() => fileInput?.click()}>Import JSON…</button>
@@ -125,13 +158,6 @@
             </select>
             <input bind:this={fileInput} type="file" accept="application/json,.json" hidden onchange={onFile} />
           </div>
-          <label class="row">
-            <input type="checkbox" checked={s.autoBackup} onchange={(e) => store.updateSettings({ autoBackup: (e.target as HTMLInputElement).checked })} />
-            <span>Download a backup every hour while the app is open</span>
-          </label>
-          <p class="help">
-            Only when something changed. Files land in your browser's Downloads folder as <code>claydo-YYYYMMDD-HHMM.json</code>{#if s.lastBackupAt}; last one {new Date(s.lastBackupAt).toLocaleString()}{/if}.
-          </p>
 
           <h3>Snapshots</h3>
           <p class="help">A copy is kept automatically each day you open the app (last 14).</p>
@@ -276,6 +302,20 @@
   .btn.danger {
     background: var(--over);
     color: #fff;
+  }
+  .fname {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .folder {
+    padding: 6px 8px;
+    border: 1.5px dashed var(--tray-line);
+    border-radius: 6px;
+  }
+  .folder.warn {
+    border-color: var(--warn);
+    background: rgba(242, 177, 52, 0.12);
   }
   .keys {
     margin-top: 12px;

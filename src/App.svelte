@@ -10,6 +10,7 @@
   import Settings from './lib/ui/Settings.svelte';
   import Trash from './lib/ui/Trash.svelte';
   import Icon from './lib/ui/Icon.svelte';
+  import BackupNotice from './lib/ui/BackupNotice.svelte';
   import Toast from './lib/ui/Toast.svelte';
   import ViewSwitcher from './lib/ui/ViewSwitcher.svelte';
   import Reflect from './lib/ui/Reflect.svelte';
@@ -194,7 +195,9 @@
         <button class="btn icon trash" title="Trash" onclick={() => (store.trashOpen = true)}>
           <Icon name="trash" />
         </button>
-        <button class="btn icon" title="Settings" onclick={() => (store.settingsOpen = true)}><Icon name="gear" /></button>
+        <button class="btn icon attention" title={store.backupAttention ? 'Settings · backups need attention' : 'Settings'} onclick={() => (store.settingsOpen = true)}>
+          <Icon name="gear" />{#if store.backupAttention}<span class="dot" aria-label="Backups need attention"></span>{/if}
+        </button>
       </div>
     </header>
     <div class="viewbar">
@@ -214,6 +217,7 @@
   <ConfirmDialog />
   <Settings />
   <Trash />
+  <BackupNotice />
   <Reflect />
   <Celebration />
   <Toast />
@@ -286,6 +290,20 @@
   .history {
     display: flex;
     gap: 6px;
+  }
+  .attention {
+    position: relative;
+  }
+  .dot {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--line);
+    animation: pop-in 300ms var(--ease-snap);
   }
 
   .viewbar {

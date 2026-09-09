@@ -7,6 +7,7 @@ import { CARD_H, CARD_W, type Bucket, type Card, type Doc, type Effort, type Id,
 import { loadDoc, saveDailySnapshot, saveDoc } from '../persist/db';
 import { downloadJson, mergeDocs } from '../persist/backup';
 import { captureRects, centerOf, flyFrom } from '../physics/fx';
+import { folderPermission, forgetBackupFolder, loadBackupFolder, pickBackupFolder, reconnectBackupFolder, supportsFolderBackup, writeFolderBackup, type DirHandle } from '../persist/folder';
 import { tick } from 'svelte';
 
 const SAVE_DEBOUNCE_MS = 300;
@@ -29,6 +30,20 @@ export class Store {
   toast = $state<{ id: number; text: string; undo?: () => void } | null>(null);
   dirty = $state(false);
   lastCompletedId = $state<Id | null>(null);
+  /** Folder-backup status for the UI. */
+  backup = $state({
+    supported: false,
+    folder: null as { name: string; state: 'ok' | 'needs-permission' } | null,
+    lastError: null as string | null
+  });
+  private folderHandle: DirHandle | null = null;
+  /** Something about backups still needs the user's attention (badge + notice). */
+  backupAttention = $derived.by(() => {
+    if (this.backup.folder?.state === 'needs-permission') return true;
+    if (this.backup.folder?.state === 'ok') return false;
+    return !this.doc.settings.backupAcknowledged;
+  });
+
   /** Where to throw the party when something gets finished (screen coords). */
   celebrateAt = $state<{ x: number; y: number; seq: number } | null>(null);
   private celebrateSeq = 0;
@@ -94,9 +109,71 @@ export class Store {
     this.loaded = true;
     if (existing) void saveDailySnapshot($state.snapshot(this.doc));
     else this.scheduleSave();
-    this.maybeAutoBackup();
+    // Ask the browser not to evict our storage under pressure.
+    try {
+      void navigator.storage?.persist?.();
+    } catch {
+      /* not available */
+    }
+    this.backup.supported = supportsFolderBackup();
+    await this.loadFolder();
+    void this.maybeAutoBackup();
     // Keep checking while the app stays open.
-    setInterval(() => this.maybeAutoBackup(), 5 * 60_000);
+    setInterval(() => void this.maybeAutoBackup(), 5 * 60_000);
+  }
+
+  // ---------- backups ----------
+  private async loadFolder(): Promise<void> {
+    if (!this.backup.supported) return;
+    const h = await loadBackupFolder();
+    this.folderHandle = h;
+    if (!h) {
+      this.backup.folder = null;
+      return;
+    }
+    const perm = await folderPermission(h);
+    this.backup.folder = { name: h.name || 'backup folder', state: perm === 'granted' ? 'ok' : 'needs-permission' };
+  }
+
+  /** Let the user pick (or change) the backup folder. Must run from a click. */
+  async chooseFolder(): Promise<void> {
+    try {
+      const h = await pickBackupFolder();
+      if (!h) return;
+      this.folderHandle = h;
+      this.backup.folder = { name: h.name || 'backup folder', state: 'ok' };
+      this.backup.lastError = null;
+      this.updateSettings({ backupAcknowledged: true });
+      await this.maybeAutoBackup(true);
+      this.showToast(`Backing up to "${h.name || 'the chosen folder'}"`);
+    } catch (e) {
+      this.backup.lastError = (e as Error).message;
+      this.showToast(`Couldn't use that folder: ${(e as Error).message}`);
+    }
+  }
+
+  /** Re-grant folder access after a browser restart. Must run from a click. */
+  async reconnectFolder(): Promise<void> {
+    if (!this.folderHandle) return;
+    const perm = await reconnectBackupFolder(this.folderHandle);
+    if (perm === 'granted') {
+      this.backup.folder = { name: this.folderHandle.name, state: 'ok' };
+      await this.maybeAutoBackup(true);
+      this.showToast('Backup folder reconnected');
+    } else this.showToast('Folder access was not granted');
+  }
+
+  async forgetFolder(): Promise<void> {
+    await forgetBackupFolder();
+    this.folderHandle = null;
+    this.backup.folder = null;
+    this.showToast('Backup folder disconnected');
+  }
+
+  /** Record the user's explicit choice for the download fallback. */
+  acknowledgeBackups(mode: 'download' | 'off'): void {
+    this.updateSettings({ autoBackup: mode === 'download', backupAcknowledged: true });
+    if (mode === 'download') void this.maybeAutoBackup(true);
   }
 
   /** Flush pending save immediately (for pagehide). */
@@ -123,17 +200,40 @@ export class Store {
 
   /** Changes since the last backup file was written. */
   private changedSinceBackup = false;
-  static BACKUP_INTERVAL_MS = 60 * 60_000;
+  /** Folder backups are silent, so hourly; downloads interrupt, so daily. */
+  static FOLDER_INTERVAL_MS = 60 * 60_000;
+  static DOWNLOAD_INTERVAL_MS = 24 * 60 * 60_000;
 
-  /** Download a backup if one is due (hourly) and something has changed since the last one. */
-  maybeAutoBackup(force = false): void {
+  /**
+   * Back up if one is due and something changed: silently into the chosen
+   * folder when there is one, otherwise a download (if enabled).
+   */
+  async maybeAutoBackup(force = false): Promise<void> {
     const s = this.doc.settings;
-    if (!s.autoBackup && !force) return;
+    const useFolder = !!this.folderHandle && this.backup.folder?.state === 'ok';
+    // Downloads interrupt, so they wait until the user has confirmed that choice.
+    if (!useFolder && !(s.autoBackup && s.backupAcknowledged) && !force) return;
+    const interval = useFolder ? Store.FOLDER_INTERVAL_MS : Store.DOWNLOAD_INTERVAL_MS;
     if (!force) {
-      if (s.lastBackupAt && Date.now() - s.lastBackupAt < Store.BACKUP_INTERVAL_MS) return;
+      if (s.lastBackupAt && Date.now() - s.lastBackupAt < interval) return;
       if (s.lastBackupAt && !this.changedSinceBackup) return;
     }
-    downloadJson($state.snapshot(this.doc));
+    const snapshot = $state.snapshot(this.doc) as Doc;
+    if (useFolder) {
+      try {
+        await writeFolderBackup(this.folderHandle!, snapshot);
+        this.backup.lastError = null;
+      } catch (e) {
+        // Permission usually lapses after a browser restart; ask for a click.
+        this.backup.lastError = (e as Error).message;
+        if (this.folderHandle && (await folderPermission(this.folderHandle)) !== 'granted') {
+          this.backup.folder = { name: this.folderHandle.name, state: 'needs-permission' };
+        }
+        return;
+      }
+    } else {
+      downloadJson(snapshot);
+    }
     s.lastBackupAt = Date.now();
     this.changedSinceBackup = false;
     this.scheduleSave();

@@ -14,10 +14,17 @@ account. Install it to the Dock and it behaves like a native app.
 In Chrome: open the URL, click the install icon at the right of the address
 bar (or ⋮ → **Cast, save, and share → Install page as app**).
 
-Your data lives in that browser's storage. By default the app also downloads
-a JSON backup to your Downloads folder once an hour while it's open (only
-when something changed). Turn that off, export by hand, or import a backup
-from ⚙.
+Your data lives in that browser's storage, so set up a backup (the ⚙ icon
+shows a dot until you do):
+
+- **Chrome / Edge:** ⚙ → *Choose backup folder…* and pick a folder, for
+  example inside iCloud Drive, Dropbox or OneDrive. The app then writes
+  `claydo-latest.json` plus one dated file per day, silently, once an hour.
+  Install it as an app and tick "allow on every visit" so the permission
+  sticks across restarts.
+- **Safari / Firefox:** no folder API, so the app downloads a JSON backup once
+  a day to your Downloads folder instead. You can also export by hand or
+  import a backup from ⚙.
 
 ## Using it
 
