@@ -1,10 +1,10 @@
 <script lang="ts">
   import { store } from '../model/store.svelte';
   import Section from './Section.svelte';
-  import DoneStrip from './DoneStrip.svelte';
 
   const timeBuckets = $derived(store.timeBuckets);
   const sideBuckets = $derived(store.buckets.filter((b) => b.kind === 'people' || b.kind === 'ideas'));
+  const doneBucket = $derived(store.buckets.find((b) => b.kind === 'done'));
 </script>
 
 <div class="board">
@@ -18,7 +18,9 @@
       <Section bucket={b} filter={store.search} />
     {/each}
   </div>
-  <DoneStrip />
+  {#if doneBucket}
+    <Section bucket={doneBucket} filter={store.search} />
+  {/if}
 </div>
 
 <style>

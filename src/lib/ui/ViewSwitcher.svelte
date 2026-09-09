@@ -9,7 +9,7 @@
     { id: 'matrix', label: 'Value × Effort', hint: 'Quick wins, big bets, fill-ins, avoid' },
     { id: 'person', label: 'Person', hint: 'Who each card involves' },
     { id: 'tag', label: 'Tag', hint: 'Group by tag' },
-    { id: 'age', label: 'Age', hint: 'How long since you touched it' }
+    { id: 'age', label: 'Age', hint: 'How long ago it was created' }
   ];
 </script>
 

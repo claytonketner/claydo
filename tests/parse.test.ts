@@ -34,6 +34,12 @@ describe('parseQuickAdd', () => {
     expect(r.title).toBe('write the doc');
   });
 
+  it('marks ideas with a tilde, leading or standalone', () => {
+    expect(parseQuickAdd('~ config as yaml', ctx)).toMatchObject({ isIdea: true, title: 'config as yaml' });
+    expect(parseQuickAdd('config as yaml ~', ctx)).toMatchObject({ isIdea: true, title: 'config as yaml' });
+    expect(parseQuickAdd('plain', ctx).isIdea).toBe(false);
+  });
+
   it('returns unknown people so the caller can create them', () => {
     const r = parseQuickAdd('Sync with @matias', ctx);
     expect(r.peopleIds).toEqual([]);

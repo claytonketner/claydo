@@ -55,7 +55,7 @@
   {#if focused}
     <div class="hint">
       <span><b>@</b>person</span><span><b>#</b>tag</span><span><b>!</b>xs·s·m·l·xl</span><span><b>*</b>1–3 value</span><span><b>&gt;</b>today·week·soon·later</span
-      ><span><b>+</b> child of selected</span><span><b>//</b> notes</span>
+      ><span><b>+</b> child of selected</span><span><b>~</b> idea</span><span><b>//</b> notes</span>
     </div>
   {/if}
 </div>

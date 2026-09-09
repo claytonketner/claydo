@@ -1,6 +1,6 @@
 <script lang="ts">
   import { store } from '../model/store.svelte';
-  import { CARD_H, CARD_W, type Bucket } from '../model/types';
+  import { CARD_H, CARD_W, type Bucket, type Card as CardT } from '../model/types';
   import Card from './Card.svelte';
   import Meter from './Meter.svelte';
   import { dnd } from './dnd.svelte';
@@ -8,23 +8,49 @@
 
   let { bucket, filter = '' }: { bucket: Bucket; filter?: string } = $props();
 
+  const isDone = $derived(bucket.kind === 'done');
   const dropKey = $derived(`bucket:${bucket.id}`);
+  const DONE_SHOWN = 20;
+  const DONE_STEP = 34;
+
   const cards = $derived.by(() => {
-    const all = store.cardsInBucket(bucket.id);
+    const all = isDone ? store.doneCards.filter((c) => c.kind !== 'person').slice(0, DONE_SHOWN) : store.cardsInBucket(bucket.id);
     if (!filter) return all;
     const q = filter.toLowerCase();
     return all.filter((c) => c.title.toLowerCase().includes(q) || c.notes.toLowerCase().includes(q) || c.tags.some((t) => t.includes(q)));
   });
   const load = $derived(store.loads.get(bucket.id));
-  const over = $derived(dnd.overDropKey === dropKey && dnd.draggingId != null && !dnd.nestIntent);
+  const over = $derived(dnd.overDropKey === dropKey && dnd.draggingId != null && dnd.intent === 'none');
   let bodyWidth = $state(600);
   const maxX = $derived(Math.max(0, bodyWidth - CARD_W - 8));
-  const height = $derived(Math.max(150, ...cards.map((c) => c.pos.y + (cardHeights[c.id] ?? CARD_H) + 30)));
+  const yOf = (c: CardT, i: number) => (isDone ? 16 + i * DONE_STEP : c.pos.y);
+  const height = $derived(Math.max(isDone ? 110 : 150, ...cards.map((c, i) => yOf(c, i) + (cardHeights[c.id] ?? CARD_H) + 30)));
+  const WEEK = 7 * 86_400_000;
+  const doneThisWeek = $derived(isDone ? store.doneCards.filter((c) => Date.now() - c.doneAt! < WEEK).length : 0);
+
+  /** Hulls around clusters with 2+ members on this tray. */
+  const hulls = $derived.by(() => {
+    if (isDone) return [];
+    const groups = new Map<string, CardT[]>();
+    for (const c of cards) if (c.clusterId) groups.set(c.clusterId, [...(groups.get(c.clusterId) ?? []), c]);
+    const out: { id: string; color: string; x: number; y: number; w: number; h: number }[] = [];
+    for (const [id, members] of groups) {
+      if (members.length < 2) continue;
+      const color = store.doc.clusters.find((k) => k.id === id)?.color ?? '#999';
+      const x0 = Math.min(...members.map((m) => Math.min(m.pos.x, maxX)));
+      const y0 = Math.min(...members.map((m) => m.pos.y));
+      const x1 = Math.max(...members.map((m) => Math.min(m.pos.x, maxX) + CARD_W));
+      const y1 = Math.max(...members.map((m) => m.pos.y + (cardHeights[m.id] ?? CARD_H)));
+      out.push({ id, color, x: x0 - 8, y: y0 - 8, w: x1 - x0 + 16, h: y1 - y0 + 16 });
+    }
+    return out;
+  });
 
   let renaming = $state(false);
   let nameDraft = $state('');
 
   function onDbl(e: MouseEvent) {
+    if (isDone) return;
     if ((e.target as HTMLElement).closest('[data-card]')) return;
     const body = e.currentTarget as HTMLElement;
     const r = body.getBoundingClientRect();
@@ -39,11 +65,6 @@
       },
       { edit: true }
     );
-  }
-  function onBodyClick(e: MouseEvent) {
-    if ((e.target as HTMLElement).closest('[data-card]')) return;
-    store.selectedId = null;
-    store.editingId = null;
   }
   function commitName() {
     const n = nameDraft.trim();
@@ -69,26 +90,37 @@
       <h2
         class="display"
         ondblclick={() => {
+          if (isDone) return;
           nameDraft = bucket.name;
           renaming = true;
         }}
-        title="Double-click to rename"
+        title={isDone ? undefined : 'Double-click to rename'}
       >
         {bucket.name}
       </h2>
     {/if}
-    <span class="count">{cards.length}</span>
-    {#if bucket.kind === 'time' && load}
-      <Meter {bucket} {load} />
+    {#if isDone}
+      <span class="count"><b>{doneThisWeek}</b> this week · {store.doneCards.length} total{#if store.doneCards.length > DONE_SHOWN} · showing {DONE_SHOWN}{/if}</span>
+      <span class="spacer"></span>
+      <span class="hint">drop here to finish</span>
+      <button class="btn sm" onclick={() => (store.reflectOpen = true)}>Reflect ✦</button>
+    {:else}
+      <span class="count">{cards.length}</span>
+      {#if bucket.kind === 'time' && load}
+        <Meter {bucket} {load} />
+      {/if}
     {/if}
   </header>
-  <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-  <div class="body" data-drop={dropKey} style:min-height="{height}px" bind:clientWidth={bodyWidth} ondblclick={onDbl} onclick={onBodyClick}>
-    {#each cards as card (card.id)}
-      <Card {card} layout="free" {dropKey} {maxX} />
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="body" class:timeline={isDone} data-drop={dropKey} style:min-height="{height}px" bind:clientWidth={bodyWidth} ondblclick={onDbl}>
+    {#each hulls as h (h.id)}
+      <div class="hull" style:left="{h.x}px" style:top="{h.y}px" style:width="{h.w}px" style:height="{h.h}px" style:--c={h.color}></div>
+    {/each}
+    {#each cards as card, i (card.id)}
+      <Card {card} layout="free" {dropKey} {maxX} y={isDone ? yOf(card, i) : null} />
     {/each}
     {#if cards.length === 0}
-      <div class="empty">double-click to add</div>
+      <div class="empty">{isDone ? 'nothing finished yet' : 'double-click to add'}</div>
     {/if}
   </div>
 </section>
@@ -115,6 +147,14 @@
   }
   .tray.kind-ideas {
     border-style: dashed;
+  }
+  .tray.kind-done {
+    border-style: dashed;
+    background: rgba(127, 207, 136, 0.08);
+  }
+  .tray.kind-done.over {
+    background: rgba(127, 207, 136, 0.25);
+    border-color: var(--done);
   }
   header {
     display: flex;
@@ -145,10 +185,35 @@
     font-size: 11px;
     color: var(--ink-faint);
   }
+  .spacer {
+    flex: 1;
+  }
+  .hint {
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
   .body {
     position: relative;
     flex: 1;
     padding: 0;
+    transition: min-height 240ms var(--ease-out);
+  }
+  .body.timeline {
+    background-image: radial-gradient(circle, rgba(47, 154, 58, 0.35) 1px, transparent 1.5px);
+    background-size: 100% 34px;
+    background-position: 0 30px;
+  }
+  .hull {
+    position: absolute;
+    border: 2px dashed var(--c);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--c) 8%, transparent);
+    pointer-events: none;
+    transition:
+      left 200ms var(--ease-out),
+      top 200ms var(--ease-out),
+      width 200ms var(--ease-out),
+      height 200ms var(--ease-out);
   }
   .empty {
     position: absolute;

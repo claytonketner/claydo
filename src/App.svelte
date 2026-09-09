@@ -3,7 +3,9 @@
   import { store } from './lib/model/store.svelte';
   import Board from './lib/ui/Board.svelte';
   import GroupView from './lib/ui/GroupView.svelte';
-  import FocusOverlay from './lib/ui/FocusOverlay.svelte';
+  import CardPopup from './lib/ui/CardPopup.svelte';
+  import DragOverlay from './lib/ui/DragOverlay.svelte';
+  import ConfirmDialog from './lib/ui/ConfirmDialog.svelte';
   import QuickAdd from './lib/ui/QuickAdd.svelte';
   import Settings from './lib/ui/Settings.svelte';
   import Toast from './lib/ui/Toast.svelte';
@@ -56,7 +58,8 @@
         (e.target as HTMLElement).blur();
         return;
       }
-      if (store.settingsOpen) store.settingsOpen = false;
+      if (store.pending) store.resolvePending('cancel');
+      else if (store.settingsOpen) store.settingsOpen = false;
       else if (store.reflectOpen) store.reflectOpen = false;
       else if (store.editingId) store.editingId = null;
       else if (store.focusedId) store.popFocus();
@@ -65,6 +68,7 @@
       return;
     }
     if (typing) return;
+    if (store.pending) return;
 
     if (e.key === '/' && !meta) {
       e.preventDefault();
@@ -88,7 +92,7 @@
       }
       if (k === 'Backspace' || k === 'Delete') {
         e.preventDefault();
-        store.deleteCard(sel.id);
+        store.requestDelete(sel.id);
         return;
       }
       if (e.shiftKey && /^Digit[123]$/.test(e.code)) {
@@ -103,7 +107,7 @@
       }
       if (k === 'd' || k === 'D') {
         e.preventDefault();
-        store.complete(sel.id);
+        store.requestComplete(sel.id);
         return;
       }
       if (k === 'f' || k === 'F') {
@@ -141,9 +145,19 @@
     if (e.key === 'n' || e.key === 'N') focusQuickAdd();
     else focusQuickAdd(e.key);
   }
+
+
+  /** Click anywhere that isn't a card or a control: drop the selection. */
+  function onPointerDown(e: PointerEvent) {
+    const t = e.target as HTMLElement | null;
+    if (!t) return;
+    if (t.closest('[data-card], button, input, textarea, select, a, label, .popup, .dialog, .toast, summary')) return;
+    store.selectedId = null;
+    store.editingId = null;
+  }
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={onKey} onpointerdown={onPointerDown} />
 
 {#if !store.loaded}
   <div class="loading display">loading…</div>
@@ -189,7 +203,9 @@
     {/if}
   </div>
 
-  <FocusOverlay />
+  <CardPopup />
+  <DragOverlay />
+  <ConfirmDialog />
   <Settings />
   <Reflect />
   <Confetti />

@@ -17,6 +17,8 @@ export interface ParsedQuickAdd {
   bucketId: Id | null;
   /** Leading "+" means "child of the selected card". */
   asChild: boolean;
+  /** A "~" token means "this is an idea". */
+  isIdea: boolean;
 }
 
 const EFFORT_WORDS: Record<string, Effort> = {
@@ -75,6 +77,7 @@ export function findBucket(buckets: { id: Id; name: string }[], word: string): I
 /**
  * Parse quick-add syntax:
  *   +          leading: make it a child of the selected card
+ *   ~          leading or standalone: this is an idea
  *   @name      person (fuzzy; unknown names are returned in newPeople)
  *   #tag       tag
  *   !m !3      effort (xs s m l xl or 1-5)
@@ -91,8 +94,13 @@ export function parseQuickAdd(input: string, ctx: ParseContext): ParsedQuickAdd 
     text = text.slice(0, sep).trim();
   }
   let asChild = false;
+  let isIdea = false;
   if (text.startsWith('+')) {
     asChild = true;
+    text = text.slice(1).trimStart();
+  }
+  if (text.startsWith('~')) {
+    isIdea = true;
     text = text.slice(1).trimStart();
   }
 
@@ -105,12 +113,17 @@ export function parseQuickAdd(input: string, ctx: ParseContext): ParsedQuickAdd 
     effort: null,
     value: null,
     bucketId: null,
-    asChild
+    asChild,
+    isIdea
   };
 
   const words: string[] = [];
   for (const raw of text.split(/\s+/)) {
     if (!raw) continue;
+    if (raw === '~') {
+      out.isIdea = true;
+      continue;
+    }
     const m = /^([@#!*>])(.*)$/.exec(raw);
     if (!m || (m[1] !== '*' && m[2].length === 0)) {
       words.push(raw);

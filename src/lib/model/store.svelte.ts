@@ -1,6 +1,6 @@
 import { bucketLoad, buildCapacityIndex, effectiveBucketId, type BucketLoad } from './capacity';
 import { History } from './history';
-import { nid } from './ids';
+import { hash01, nid } from './ids';
 import { parseQuickAdd } from './parse';
 import { emptyDoc, newCard, seedDoc } from './seed';
 import { CARD_H, CARD_W, type Bucket, type Card, type Doc, type Effort, type Id, type Value, type ViewMode } from './types';
@@ -24,6 +24,8 @@ export class Store {
   toast = $state<{ id: number; text: string; undo?: () => void } | null>(null);
   dirty = $state(false);
   lastCompletedId = $state<Id | null>(null);
+  /** A complete/delete waiting on the "what about the sub-items?" dialog. */
+  pending = $state<{ action: 'complete' | 'delete'; id: Id; count: number } | null>(null);
 
   private history = new History<Doc>(100);
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -228,9 +230,18 @@ export class Store {
     if (!c) return;
     const bucket = this.doc.buckets.find((b) => b.id === bucketId);
     if (!bucket) return;
+    if (bucket.kind === 'done') {
+      this.requestComplete(id);
+      return;
+    }
+    const oldCluster = c.bucketId !== bucketId ? c.clusterId : null;
     this.commit('move card', () => {
       c.bucketId = bucketId;
       c.pos = pos ?? this.freeSpot(bucketId, id);
+      if (oldCluster) {
+        c.clusterId = null;
+        this.pruneCluster(oldCluster);
+      }
       c.touchedAt = c.updatedAt = Date.now();
       if (bucket.kind === 'time') this.doc.settings.lastDropBucketId = bucketId;
       if (bucket.kind === 'people' && c.kind === 'todo') c.kind = 'person';
@@ -245,9 +256,14 @@ export class Store {
     const parent = this.byId.get(parentId);
     if (!child || !parent || child.kind === 'person') return false;
     if (this.isDescendant(parentId, childId)) return false;
+    const oldCluster = child.clusterId;
     this.commit('nest card', () => {
       child.parentId = parentId;
       child.bucketId = null;
+      if (oldCluster) {
+        child.clusterId = null;
+        this.pruneCluster(oldCluster);
+      }
       child.touchedAt = child.updatedAt = Date.now();
       parent.touchedAt = Date.now();
     });
@@ -273,6 +289,8 @@ export class Store {
     this.commit('complete', () => {
       c.doneAt = now;
       c.updatedAt = now;
+      // Done tray is a timeline: y comes from order, x is a random-ish spot for fun.
+      c.pos = { x: Math.round(hash01(c.id, 7) * 520), y: 0 };
     });
     this.lastCompletedId = id;
     if (this.selectedId === id) this.selectedId = null;
@@ -286,25 +304,101 @@ export class Store {
       c.doneAt = null;
       c.touchedAt = c.updatedAt = Date.now();
       if (!c.parentId && !c.bucketId) c.bucketId = this.defaultBucketId;
+      if (c.bucketId) c.pos = this.freeSpot(c.bucketId, id);
     });
   }
 
-  deleteCard(id: Id): void {
+  /** Every card below `id` in the hierarchy. */
+  descendantsOf(id: Id): Card[] {
+    const out: Card[] = [];
+    const seen = new Set<Id>([id]);
+    const queue = [id];
+    while (queue.length) {
+      const cur = queue.shift()!;
+      for (const k of this.childrenOf(cur)) {
+        if (seen.has(k.id)) continue;
+        seen.add(k.id);
+        out.push(k);
+        queue.push(k.id);
+      }
+    }
+    return out;
+  }
+
+  /** Detach direct children and put them back on the board. */
+  private releaseChildren(id: Id): void {
+    const parent = this.byId.get(id);
+    const fallback = (parent && effectiveBucketId(parent, this.byId)) ?? this.defaultBucketId;
+    const target = this.doc.buckets.find((b) => b.id === fallback && b.kind !== 'people' && b.kind !== 'done')?.id ?? this.defaultBucketId;
+    for (const k of this.childrenOf(id)) {
+      k.parentId = null;
+      if (!k.bucketId) {
+        k.bucketId = target;
+        k.pos = this.freeSpot(target, k.id);
+      }
+      k.updatedAt = Date.now();
+    }
+  }
+
+  /** Complete, asking first when there are open sub-items. */
+  requestComplete(id: Id): void {
+    const c = this.byId.get(id);
+    if (!c || c.kind === 'person' || c.doneAt != null) return;
+    const open = this.descendantsOf(id).filter((d) => d.doneAt == null).length;
+    if (open > 0) this.pending = { action: 'complete', id, count: open };
+    else this.complete(id);
+  }
+
+  /** Delete, asking first when there are sub-items. */
+  requestDelete(id: Id): void {
+    const c = this.byId.get(id);
+    if (!c) return;
+    const n = this.descendantsOf(id).length;
+    if (n > 0) this.pending = { action: 'delete', id, count: n };
+    else this.deleteCard(id);
+  }
+
+  /** Answer the dialog: apply to `all` sub-items too, or `one` (sub-items return to the board). */
+  resolvePending(mode: 'all' | 'one' | 'cancel'): void {
+    const p = this.pending;
+    this.pending = null;
+    if (!p || mode === 'cancel') return;
+    if (p.action === 'complete') {
+      if (mode === 'all') this.completeAll(p.id);
+      else {
+        this.commit('release sub-items', () => this.releaseChildren(p.id));
+        this.complete(p.id);
+      }
+    } else {
+      this.deleteCard(p.id, mode === 'all' ? 'all' : 'release');
+    }
+  }
+
+  private completeAll(id: Id): void {
+    const c = this.byId.get(id);
+    if (!c) return;
+    const now = Date.now();
+    const all = [c, ...this.descendantsOf(id)].filter((x) => x.doneAt == null && x.kind !== 'person');
+    this.commit('complete all', () => {
+      for (const x of all) {
+        x.doneAt = now;
+        x.updatedAt = now;
+        x.pos = { x: Math.round(hash01(x.id, 7) * 520), y: 0 };
+      }
+    });
+    this.lastCompletedId = id;
+    if (this.selectedId && all.some((x) => x.id === this.selectedId)) this.selectedId = null;
+    this.showToast(`Done: ${c.title || 'untitled'} + ${all.length - 1} sub-items`, () => this.undo());
+  }
+
+  deleteCard(id: Id, children: 'all' | 'release' = 'all'): void {
     const c = this.byId.get(id);
     if (!c) return;
     const doomed = new Set<Id>([id]);
-    let grew = true;
-    while (grew) {
-      grew = false;
-      for (const x of this.doc.cards) {
-        if (x.parentId && doomed.has(x.parentId) && !doomed.has(x.id)) {
-          doomed.add(x.id);
-          grew = true;
-        }
-      }
-    }
+    if (children === 'all') for (const d of this.descendantsOf(id)) doomed.add(d.id);
     const title = c.title;
     this.commit('delete', () => {
+      if (children === 'release') this.releaseChildren(id);
       this.doc.cards = this.doc.cards.filter((x) => !doomed.has(x.id));
       for (const x of this.doc.cards) {
         x.peopleIds = x.peopleIds.filter((p) => !doomed.has(p));
@@ -333,6 +427,72 @@ export class Store {
     this.commit('duplicate', () => this.doc.cards.push(copy));
     this.selectedId = copy.id;
     return copy;
+  }
+
+  /** Pull a nested card out to a board tray at a given spot. */
+  unnestTo(id: Id, bucketId: Id, pos?: { x: number; y: number }): void {
+    const c = this.byId.get(id);
+    const bucket = this.doc.buckets.find((b) => b.id === bucketId);
+    if (!c || !bucket) return;
+    this.commit('un-nest card', () => {
+      c.parentId = null;
+      c.bucketId = bucketId;
+      c.pos = pos ?? this.freeSpot(bucketId, id);
+      c.touchedAt = c.updatedAt = Date.now();
+      if (bucket.kind === 'ideas' && c.kind === 'todo') c.kind = 'idea';
+      if (bucket.kind === 'time' && c.kind === 'idea') c.kind = 'todo';
+    });
+  }
+
+  // ---------- clusters (loose grouping) ----------
+  private static CLUSTER_COLORS = ['#ff6b4a', '#4a9bff', '#67c26b', '#f2b134', '#b07cff', '#ff7ab6', '#2bb5b0'];
+
+  clusterOf(id: Id) {
+    const c = this.byId.get(id);
+    return c?.clusterId ? (this.doc.clusters.find((k) => k.id === c.clusterId) ?? null) : null;
+  }
+  clusterMembers(clusterId: Id): Card[] {
+    return this.doc.cards.filter((c) => c.clusterId === clusterId && c.doneAt == null);
+  }
+
+  /** Put `a` in `b`'s cluster (creating one if needed). */
+  group(a: Id, b: Id): void {
+    const ca = this.byId.get(a);
+    const cb = this.byId.get(b);
+    if (!ca || !cb || a === b) return;
+    if (ca.clusterId && ca.clusterId === cb.clusterId) return;
+    this.commit('group', () => {
+      let cid = cb.clusterId;
+      if (!cid) {
+        cid = nid();
+        const color = Store.CLUSTER_COLORS[this.doc.clusters.length % Store.CLUSTER_COLORS.length];
+        this.doc.clusters.push({ id: cid, name: null, color });
+        cb.clusterId = cid;
+      }
+      const old = ca.clusterId;
+      ca.clusterId = cid;
+      ca.updatedAt = cb.updatedAt = Date.now();
+      if (old) this.pruneCluster(old);
+    });
+  }
+
+  ungroup(id: Id): void {
+    const c = this.byId.get(id);
+    if (!c?.clusterId) return;
+    const old = c.clusterId;
+    this.commit('ungroup', () => {
+      c.clusterId = null;
+      c.updatedAt = Date.now();
+      this.pruneCluster(old);
+    });
+  }
+
+  private pruneCluster(clusterId: Id): void {
+    const members = this.doc.cards.filter((c) => c.clusterId === clusterId);
+    if (members.length <= 1) {
+      for (const m of members) m.clusterId = null;
+      this.doc.clusters = this.doc.clusters.filter((k) => k.id !== clusterId);
+    }
   }
 
   setEffort(id: Id, effort: Effort | null): void {
@@ -389,9 +549,11 @@ export class Store {
     const peopleIds = [...parsed.peopleIds, ...this.ensurePeople(parsed.newPeople)];
     let parentId = opts.parentId ?? null;
     if (parsed.asChild && this.selectedId && this.selectedId !== parentId) parentId = this.selectedId;
-    const bucketId = parsed.bucketId ?? (parentId ? null : (opts.bucketId ?? this.defaultBucketId));
+    const ideasBucket = this.doc.buckets.find((b) => b.kind === 'ideas');
+    let bucketId = parsed.bucketId ?? (parentId ? null : (opts.bucketId ?? this.defaultBucketId));
+    if (parsed.isIdea && !parsed.bucketId && !parentId && ideasBucket) bucketId = ideasBucket.id;
     const bucket = bucketId ? this.doc.buckets.find((b) => b.id === bucketId) : null;
-    const kind = bucket?.kind === 'people' ? 'person' : bucket?.kind === 'ideas' ? 'idea' : 'todo';
+    const kind = bucket?.kind === 'people' ? 'person' : bucket?.kind === 'ideas' || parsed.isIdea ? 'idea' : 'todo';
     return this.addCard(
       {
         title: parsed.title || parsed.notes.slice(0, 60),

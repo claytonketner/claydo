@@ -111,7 +111,7 @@
     margin-top: -1.5px;
   }
   .over .bar {
-    animation: wobble 1.6s ease-in-out infinite;
+    rotate: -3deg;
     border-color: var(--over);
   }
   .over .label {

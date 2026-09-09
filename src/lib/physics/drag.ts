@@ -1,50 +1,35 @@
 /**
- * Pointer-driven drag with a light physics feel:
- *  - the element follows the pointer with a short spring lag while held
- *  - velocity is sampled over the last ~80ms
- *  - on release it coasts with strong friction and settles, bouncing softly
- *    off the bounds the caller supplies.
+ * Pointer-driven drag. The element follows the pointer with a short spring lag
+ * while held (a slightly "chunky" feel), and on release it lands exactly where
+ * it was let go, with a small bounce. No coasting.
  *
- * The action reports positions in the parent's coordinate space; the caller
- * owns the model and decides what a drop means.
+ * While held the element carries data-drag="dragging", and for ~300ms after
+ * release data-drag="dropped" (for a landing animation).
+ *
+ * The action only moves the element visually (via transform) and reports
+ * positions in the parent's coordinate space; the caller owns the model and
+ * decides what a drop means. The caller must update the model synchronously
+ * inside `onRelease` so the DOM position and the cleared transform land in the
+ * same paint.
  */
-
-export interface DragBounds {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-}
 
 export interface DragEvents {
   /** Fired once pointer moved > threshold. Return false to cancel. */
   onStart?: (e: PointerEvent) => boolean | void;
-  /** Live position of the element's top-left (parent coords) and the pointer (client coords). */
+  /** Live position of the element's top-left (parent coords) and the pointer event. */
   onMove?: (pos: { x: number; y: number }, e: PointerEvent) => void;
-  /** Pointer released. `pos` is where the element is right now; `velocity` in px/s. */
-  onRelease?: (pos: { x: number; y: number }, velocity: { vx: number; vy: number }, e: PointerEvent) => DragBounds | null | void;
-  /** After the coast/settle animation finishes. */
-  onSettle?: (pos: { x: number; y: number }) => void;
-  /** Per animation frame while coasting, so the caller can update the model. */
-  onCoast?: (pos: { x: number; y: number }) => void;
+  /** Pointer released at `pos` (parent coords, where the element is right now). */
+  onRelease?: (pos: { x: number; y: number }, e: PointerEvent) => void;
   onClick?: (e: PointerEvent) => void;
 }
 
 export interface DragOptions extends DragEvents {
   threshold?: number;
-  /** Stiffness of the follow spring while held; 1 = rigid. */
+  /** Follow-spring stiffness while held; 1 = rigid. */
   follow?: number;
-  friction?: number;
-  bounce?: number;
   enabled?: () => boolean;
   /** Ignore drags starting inside these selectors (inputs, buttons). */
   ignore?: string;
-}
-
-interface Sample {
-  t: number;
-  x: number;
-  y: number;
 }
 
 export function draggable(node: HTMLElement, opts: DragOptions) {
@@ -56,17 +41,11 @@ export function draggable(node: HTMLElement, opts: DragOptions) {
   let target = { x: 0, y: 0 };
   let dragging = false;
   let raf = 0;
-  let samples: Sample[] = [];
+  let dropTimer: ReturnType<typeof setTimeout> | null = null;
   let lastEvent: PointerEvent | null = null;
 
   const threshold = () => options.threshold ?? 3;
-  const follow = () => options.follow ?? 0.55;
-  const friction = () => options.friction ?? 0.82;
-  const bounce = () => options.bounce ?? 0.35;
-
-  function currentPos(): { x: number; y: number } {
-    return { x: node.offsetLeft, y: node.offsetTop };
-  }
+  const follow = () => options.follow ?? 0.6;
 
   function applyTransform() {
     node.style.transform = `translate(${cur.x - startPos.x}px, ${cur.y - startPos.y}px)`;
@@ -88,10 +67,9 @@ export function draggable(node: HTMLElement, opts: DragOptions) {
     if (options.ignore && (e.target as HTMLElement).closest(options.ignore)) return;
     pointerId = e.pointerId;
     startClient = { x: e.clientX, y: e.clientY };
-    startPos = currentPos();
+    startPos = { x: node.offsetLeft, y: node.offsetTop };
     cur = { ...startPos };
     target = { ...startPos };
-    samples = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
     dragging = false;
     node.setPointerCapture(e.pointerId);
     node.addEventListener('pointermove', onPointerMove);
@@ -110,22 +88,14 @@ export function draggable(node: HTMLElement, opts: DragOptions) {
         return;
       }
       dragging = true;
-      node.classList.add('dragging');
+      if (dropTimer) clearTimeout(dropTimer);
+      // A data attribute rather than a class: Svelte rewrites `class` on reactive
+      // updates and would clobber anything added imperatively.
+      node.dataset.drag = 'dragging';
       raf = requestAnimationFrame(followLoop);
     }
     lastEvent = e;
     target = { x: startPos.x + dx, y: startPos.y + dy };
-    const now = performance.now();
-    samples.push({ t: now, x: e.clientX, y: e.clientY });
-    while (samples.length > 2 && now - samples[0].t > 80) samples.shift();
-  }
-
-  function velocity(): { vx: number; vy: number } {
-    if (samples.length < 2) return { vx: 0, vy: 0 };
-    const a = samples[0];
-    const b = samples[samples.length - 1];
-    const dt = Math.max(1, b.t - a.t) / 1000;
-    return { vx: (b.x - a.x) / dt, vy: (b.y - a.y) / dt };
   }
 
   function onPointerUp(e: PointerEvent) {
@@ -137,58 +107,17 @@ export function draggable(node: HTMLElement, opts: DragOptions) {
       options.onClick?.(e);
       return;
     }
-    node.classList.remove('dragging');
-    // snap to pointer target before release so the release position is truthful
+    // Land exactly where the pointer let go (not where the spring lag had us).
     cur = { ...target };
     applyTransform();
-    const v = velocity();
-    const bounds = options.onRelease?.({ ...cur }, v, e);
-    if (bounds === null || bounds === undefined) {
-      node.style.transform = '';
-      options.onSettle?.({ ...cur });
-      return;
-    }
-    coast(v, bounds);
-  }
-
-  function coast(v: { vx: number; vy: number }, bounds: DragBounds) {
-    // Convert px/s to px/frame at ~60fps and cap the fling so it stays snappy.
-    const cap = 1400;
-    let vx = Math.max(-cap, Math.min(cap, v.vx)) / 60;
-    let vy = Math.max(-cap, Math.min(cap, v.vy)) / 60;
-    const f = friction();
-    const b = bounce();
-    node.classList.add('coasting');
-    const step = () => {
-      vx *= f;
-      vy *= f;
-      cur.x += vx;
-      cur.y += vy;
-      if (cur.x < bounds.minX) {
-        cur.x = bounds.minX;
-        vx = -vx * b;
-      } else if (cur.x > bounds.maxX) {
-        cur.x = bounds.maxX;
-        vx = -vx * b;
-      }
-      if (cur.y < bounds.minY) {
-        cur.y = bounds.minY;
-        vy = -vy * b;
-      } else if (cur.y > bounds.maxY) {
-        cur.y = bounds.maxY;
-        vy = -vy * b;
-      }
-      applyTransform();
-      options.onCoast?.({ ...cur });
-      if (Math.abs(vx) > 0.15 || Math.abs(vy) > 0.15) {
-        raf = requestAnimationFrame(step);
-      } else {
-        node.classList.remove('coasting');
-        node.style.transform = '';
-        options.onSettle?.({ x: Math.round(cur.x), y: Math.round(cur.y) });
-      }
-    };
-    raf = requestAnimationFrame(step);
+    node.dataset.drag = 'dropped';
+    dropTimer = setTimeout(() => {
+      if (node.dataset.drag === 'dropped') delete node.dataset.drag;
+    }, 320);
+    options.onRelease?.({ x: Math.round(cur.x), y: Math.round(cur.y) }, e);
+    // The model has been updated synchronously above; clearing the transform
+    // now means both changes paint together.
+    node.style.transform = '';
   }
 
   function cleanup() {
@@ -216,6 +145,7 @@ export function draggable(node: HTMLElement, opts: DragOptions) {
     },
     destroy() {
       cancelAnimationFrame(raf);
+      if (dropTimer) clearTimeout(dropTimer);
       cleanup();
       node.removeEventListener('pointerdown', onPointerDown);
     }
@@ -229,4 +159,19 @@ export function elementUnder(e: { clientX: number; clientY: number }, selector: 
   const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
   if (except) except.style.pointerEvents = prev;
   return el?.closest(selector) as HTMLElement | null;
+}
+
+export interface Rect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** Fraction of `a`'s area covered by `b`. */
+export function overlapRatio(a: Rect, b: Rect): number {
+  const w = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
+  const h = Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
+  if (w <= 0 || h <= 0) return 0;
+  return (w * h) / Math.max(1, a.width * a.height);
 }

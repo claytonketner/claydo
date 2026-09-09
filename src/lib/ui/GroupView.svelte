@@ -60,7 +60,7 @@
       case 'age': {
         const now = Date.now();
         for (const g of AGE_GROUPS)
-          cols.push({ key: g.key, label: g.label, drop: g.key === 'today' ? 'age:touch' : null, hint: g.key === 'today' ? 'drop here to freshen' : undefined, cards: by((c) => ageGroupKey(c.touchedAt, now) === g.key) });
+          cols.push({ key: g.key, label: g.label, drop: null, cards: by((c) => ageGroupKey(c.createdAt, now) === g.key) });
         break;
       }
     }
@@ -69,17 +69,11 @@
 
   const points = (cards: CardT[]) => cards.reduce((s, c) => s + (c.kind === 'todo' ? effectivePoints(c, store.capIdx) : 0), 0);
 
-  function onBodyClick(e: MouseEvent) {
-    if ((e.target as HTMLElement).closest('[data-card]')) return;
-    store.selectedId = null;
-    store.editingId = null;
-  }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-<div class="group-view" class:matrix={view === 'matrix'} onclick={onBodyClick}>
+<div class="group-view" class:matrix={view === 'matrix'}>
   {#each columns as col (col.key)}
-    <section class="col" class:over={col.drop != null && dnd.overDropKey === col.drop && !dnd.nestIntent} class:nodrop={col.drop == null}>
+    <section class="col" class:over={col.drop != null && dnd.overDropKey === col.drop && dnd.intent === 'none'} class:nodrop={col.drop == null}>
       <header>
         <h2 class="display">{col.label}</h2>
         {#if col.hint}<span class="hint">{col.hint}</span>{/if}
