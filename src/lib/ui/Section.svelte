@@ -30,7 +30,7 @@
     if (isDone) store.doneTrayWidth = bodyWidth;
   });
   const yOf = (c: CardT, i: number) => (isDone ? 16 + i * DONE_STEP : c.pos.y);
-  const height = $derived(Math.max(isDone ? 110 : 150, ...cards.map((c, i) => yOf(c, i) + (cardHeights[c.id] ?? CARD_H) + 30)));
+  const height = $derived(Math.max(isDone ? 110 : 150, ...cards.map((c, i) => yOf(c, i) + (cardHeights[c.id] ?? CARD_H) + 30)) + extra);
   const WEEK = 7 * 86_400_000;
   const doneThisWeek = $derived(isDone ? store.doneCards.filter((c) => Date.now() - c.doneAt! < WEEK).length : 0);
 
@@ -79,9 +79,8 @@
   }
 </script>
 
-<!-- While a drag hovers, the tray grows an apron below (padding) and pulls the same amount back
-     with a negative margin, so it overlaps whatever is beneath instead of shoving it around. -->
-<section class="tray kind-{bucket.kind}" class:over class:hovering style:margin-bottom="-{extra}px">
+<!-- While a drag hovers, the tray grows extra room below its cards; everything beneath moves down. -->
+<section class="tray kind-{bucket.kind}" class:over class:hovering>
   <header>
     {#if renaming}
       <input
@@ -120,7 +119,7 @@
     {/if}
   </header>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="body" class:timeline={isDone} data-drop={dropKey} style:min-height="{height}px" style:padding-bottom="{extra}px" bind:clientWidth={bodyWidth} ondblclick={onDbl}>
+  <div class="body" class:timeline={isDone} data-drop={dropKey} style:min-height="{height}px" bind:clientWidth={bodyWidth} ondblclick={onDbl}>
     {#each hulls as h (h.id)}
       <div class="hull" style:left="{h.x}px" style:top="{h.y}px" style:width="{h.w}px" style:height="{h.h}px" style:--c={h.color}>
         <button class="ungroup" title="Ungroup these cards" onclick={() => store.dissolveCluster(h.id)}>✕</button>
@@ -145,12 +144,7 @@
     background: var(--tray);
     transition:
       background 120ms,
-      border-color 120ms,
-      margin-bottom 200ms var(--ease-out);
-  }
-  .tray.hovering {
-    position: relative;
-    z-index: 30;
+      border-color 120ms;
   }
   .tray.over {
     background: var(--tray-hover);
@@ -211,9 +205,7 @@
     position: relative;
     flex: 1;
     padding: 0;
-    transition:
-      min-height 240ms var(--ease-out),
-      padding-bottom 200ms var(--ease-out);
+    transition: min-height 200ms var(--ease-out);
   }
   .body.timeline {
     background-image: radial-gradient(circle, rgba(47, 154, 58, 0.35) 1px, transparent 1.5px);

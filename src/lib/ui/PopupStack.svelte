@@ -17,7 +17,7 @@
   function onWindowMove(e: PointerEvent) {
     if (!stack.length || !dnd.draggingId || !stageEl || dnd.peek) return;
     const top = stageEl.querySelector<HTMLElement>('.layer.top .popup');
-    const draggedEl = document.querySelector(`[data-card="${dnd.draggingId}"]`);
+    const draggedEl = document.querySelector('[data-drag="dragging"]');
     if (!top || !draggedEl || !stageEl.contains(draggedEl)) return;
     const r = top.getBoundingClientRect();
     const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;

@@ -84,7 +84,7 @@
       <span class="crumb">{isPerson ? 'Person' : card.kind === 'idea' ? 'Idea' : 'Todo'}</span>
       {#if parent}<span class="sep">·</span><button class="btn ghost sm" onclick={() => store.focus(parent.id)}>↰ {parent.title || 'untitled'}</button>{/if}
       <span class="spacer"></span>
-      {#if !isPerson}<span class="hint">Drag a sub-todo out of this window and hold to place it on the board</span>{/if}
+      {#if !isPerson}<span class="hint">Drag this card or a sub-todo out of this window and hold to place it on the board</span>{/if}
       <button class="btn sm" onclick={() => store.popFocus()}>close <span class="kbd">esc</span></button>
     </nav>
 

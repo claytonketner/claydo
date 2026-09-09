@@ -58,8 +58,11 @@ export interface Settings {
   lastDropBucketId: Id | null;
   /** Points a card with no effort (and no sized children) counts for. */
   defaultEffortPoints: number;
+  /** Download a JSON backup every hour while the app is open (only if something changed). */
   autoBackup: boolean;
   lastBackupAt: number | null;
+  /** Bumped when backup defaults change, so existing boards pick up the new default once. */
+  backupVersion?: number;
   celebrate: boolean;
   theme: 'light' | 'dark' | 'system';
 }

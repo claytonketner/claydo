@@ -14,8 +14,10 @@ account. Install it to the Dock and it behaves like a native app.
 In Chrome: open the URL, click the install icon at the right of the address
 bar (or ⋮ → **Cast, save, and share → Install page as app**).
 
-Your data lives in that browser's storage. Export a JSON backup from ⚙ now
-and then, or turn on the daily auto-backup there.
+Your data lives in that browser's storage. By default the app also downloads
+a JSON backup to your Downloads folder once an hour while it's open (only
+when something changed). Turn that off, export by hand, or import a backup
+from ⚙.
 
 ## Using it
 
@@ -45,8 +47,9 @@ notes, effort, value, timeframe, tags, people (with a jump to that person's
 popup), and its sub-todos in mini-trays. Open a sub-todo from inside and the
 parent's popup stacks up behind it like a thrown-down card; close the top one
 and the next straightens up. Click the backdrop to close them all.
-Drag a sub-todo out of the popup and hold for a moment: the popup steps aside
-so you can drop it anywhere on the board, which un-nests it.
+Drag the card itself or a sub-todo out of the popup and hold for a moment:
+the popup steps aside so you can drop it anywhere on the board (a sub-todo
+gets un-nested).
 
 **Drag.** Cards land exactly where you let go, with a little bounce. Drop one
 on a tray to move it; the tray opens up extra room below while you hover.

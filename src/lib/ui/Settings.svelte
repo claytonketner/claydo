@@ -127,8 +127,11 @@
           </div>
           <label class="row">
             <input type="checkbox" checked={s.autoBackup} onchange={(e) => store.updateSettings({ autoBackup: (e.target as HTMLInputElement).checked })} />
-            <span>Download a backup once a day when I open the app</span>
+            <span>Download a backup every hour while the app is open</span>
           </label>
+          <p class="help">
+            Only when something changed. Files land in your browser's Downloads folder as <code>claydo-YYYYMMDD-HHMM.json</code>{#if s.lastBackupAt}; last one {new Date(s.lastBackupAt).toLocaleString()}{/if}.
+          </p>
 
           <h3>Snapshots</h3>
           <p class="help">A copy is kept automatically each day you open the app (last 14).</p>

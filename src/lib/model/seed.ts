@@ -5,8 +5,9 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultBucketId: null,
   lastDropBucketId: null,
   defaultEffortPoints: 2,
-  autoBackup: false,
+  autoBackup: true,
   lastBackupAt: null,
+  backupVersion: 2,
   celebrate: true,
   theme: 'system'
 };

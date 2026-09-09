@@ -85,10 +85,18 @@ export class Store {
     const existing = await loadDoc();
     this.doc = existing ?? seedDoc();
     this.purgeTrash();
+    // Boards saved before hourly backups existed get the new default once.
+    if ((this.doc.settings.backupVersion ?? 0) < 2) {
+      this.doc.settings.autoBackup = true;
+      this.doc.settings.backupVersion = 2;
+      this.scheduleSave();
+    }
     this.loaded = true;
     if (existing) void saveDailySnapshot($state.snapshot(this.doc));
     else this.scheduleSave();
     this.maybeAutoBackup();
+    // Keep checking while the app stays open.
+    setInterval(() => this.maybeAutoBackup(), 5 * 60_000);
   }
 
   /** Flush pending save immediately (for pagehide). */
@@ -105,6 +113,7 @@ export class Store {
 
   private scheduleSave(): void {
     this.dirty = true;
+    this.changedSinceBackup = true;
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null;
@@ -112,13 +121,21 @@ export class Store {
     }, SAVE_DEBOUNCE_MS);
   }
 
-  private maybeAutoBackup(): void {
+  /** Changes since the last backup file was written. */
+  private changedSinceBackup = false;
+  static BACKUP_INTERVAL_MS = 60 * 60_000;
+
+  /** Download a backup if one is due (hourly) and something has changed since the last one. */
+  maybeAutoBackup(force = false): void {
     const s = this.doc.settings;
-    if (!s.autoBackup) return;
-    const DAY = 86_400_000;
-    if (s.lastBackupAt && Date.now() - s.lastBackupAt < DAY) return;
+    if (!s.autoBackup && !force) return;
+    if (!force) {
+      if (s.lastBackupAt && Date.now() - s.lastBackupAt < Store.BACKUP_INTERVAL_MS) return;
+      if (s.lastBackupAt && !this.changedSinceBackup) return;
+    }
     downloadJson($state.snapshot(this.doc));
     s.lastBackupAt = Date.now();
+    this.changedSinceBackup = false;
     this.scheduleSave();
   }
 
