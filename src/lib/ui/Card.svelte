@@ -147,7 +147,7 @@
   }
 
   const dragOpts = $derived({
-    enabled: () => !editing && !popup,
+    enabled: () => !editing,
     ignore: 'input, textarea, button, a',
     onStart: () => {
       store.selectedId = card.id;

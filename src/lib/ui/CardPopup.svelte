@@ -19,7 +19,7 @@
   const bucket = $derived(card ? store.bucketOf(card) : null);
   const timeBuckets = $derived(store.timeBuckets);
   const ideasBucket = $derived(store.buckets.find((b) => b.kind === 'ideas') ?? null);
-  const people = $derived(card ? card.peopleIds.map((id) => store.card(id)).filter((p): p is CardT => !!p) : []);
+  const people = $derived(card ? card.peopleIds.map((id) => store.live(id)).filter((p): p is CardT => !!p) : []);
   const mentions = $derived(card && isPerson ? store.mentionsOf(card.id) : []);
   const recentlyDone = $derived(isPerson ? doneKids.filter((k) => Date.now() - k.doneAt! < 14 * 86_400_000) : []);
   const stale = $derived(card && card.kind === 'todo' && bucket?.kind === 'time' && card.doneAt == null ? staleStage(card.createdAt) : 0);

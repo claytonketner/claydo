@@ -32,6 +32,8 @@ export interface Card {
   /** Last time it was edited or dragged; drives staleness. */
   touchedAt: number;
   doneAt: number | null;
+  /** Soft-deleted; kept in the trash for 30 days. */
+  deletedAt: number | null;
 }
 
 export interface Bucket {

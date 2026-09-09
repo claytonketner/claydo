@@ -52,6 +52,7 @@ export function newCard(partial: Partial<Card> & { title: string }, now = Date.n
     updatedAt: now,
     touchedAt: now,
     doneAt: null,
+    deletedAt: null,
     ...partial
   };
 }

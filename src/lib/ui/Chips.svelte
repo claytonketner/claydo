@@ -5,7 +5,7 @@
   /** Compact attribute chips + (when `editable`) tap-to-set controls. */
   let { card, editable = false }: { card: Card; editable?: boolean } = $props();
 
-  const people = $derived(card.peopleIds.map((id) => store.card(id)).filter((p): p is Card => !!p));
+  const people = $derived(card.peopleIds.map((id) => store.live(id)).filter((p): p is Card => !!p));
   const initials = (name: string) =>
     name
       .split(/\s+/)

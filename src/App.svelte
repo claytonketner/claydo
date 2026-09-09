@@ -8,6 +8,7 @@
   import ConfirmDialog from './lib/ui/ConfirmDialog.svelte';
   import QuickAdd from './lib/ui/QuickAdd.svelte';
   import Settings from './lib/ui/Settings.svelte';
+  import Trash from './lib/ui/Trash.svelte';
   import Toast from './lib/ui/Toast.svelte';
   import ViewSwitcher from './lib/ui/ViewSwitcher.svelte';
   import Reflect from './lib/ui/Reflect.svelte';
@@ -59,6 +60,7 @@
         return;
       }
       if (store.pending) store.resolvePending('cancel');
+      else if (store.trashOpen) store.trashOpen = false;
       else if (store.settingsOpen) store.settingsOpen = false;
       else if (store.reflectOpen) store.reflectOpen = false;
       else if (store.editingId) store.editingId = null;
@@ -188,6 +190,9 @@
       <div class="history">
         <button class="btn icon" disabled={!store.canUndo} title="Undo (⌘Z)" onclick={() => store.undo()}>↶</button>
         <button class="btn icon" disabled={!store.canRedo} title="Redo (⇧⌘Z)" onclick={() => store.redo()}>↷</button>
+        <button class="btn icon trash" title="Trash" onclick={() => (store.trashOpen = true)}>
+          🗑{#if store.trash.length}<span class="badge">{store.trash.length}</span>{/if}
+        </button>
         <button class="btn icon" title="Settings" onclick={() => (store.settingsOpen = true)}>⚙</button>
       </div>
     </header>
@@ -207,6 +212,7 @@
   <DragOverlay />
   <ConfirmDialog />
   <Settings />
+  <Trash />
   <Reflect />
   <Celebration />
   <Toast />
@@ -279,6 +285,25 @@
   .history {
     display: flex;
     gap: 6px;
+  }
+  .trash {
+    position: relative;
+  }
+  .badge {
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 9px;
+    border: 2px solid var(--line);
+    background: var(--accent);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 14px;
+    text-align: center;
   }
   .viewbar {
     display: flex;

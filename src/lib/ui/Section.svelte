@@ -23,6 +23,9 @@
   const over = $derived(dnd.overDropKey === dropKey && dnd.draggingId != null && dnd.intent === 'none');
   let bodyWidth = $state(600);
   const maxX = $derived(Math.max(0, bodyWidth - CARD_W - 8));
+  $effect(() => {
+    if (isDone) store.doneTrayWidth = bodyWidth;
+  });
   const yOf = (c: CardT, i: number) => (isDone ? 16 + i * DONE_STEP : c.pos.y);
   const height = $derived(Math.max(isDone ? 110 : 150, ...cards.map((c, i) => yOf(c, i) + (cardHeights[c.id] ?? CARD_H) + 30)));
   const WEEK = 7 * 86_400_000;

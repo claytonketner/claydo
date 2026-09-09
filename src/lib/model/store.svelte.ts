@@ -1,6 +1,6 @@
 import { bucketLoad, buildCapacityIndex, effectiveBucketId, type BucketLoad } from './capacity';
 import { History } from './history';
-import { hash01, nid } from './ids';
+import { nid } from './ids';
 import { parseQuickAdd } from './parse';
 import { emptyDoc, newCard, seedDoc } from './seed';
 import { CARD_H, CARD_W, type Bucket, type Card, type Doc, type Effort, type Id, type Value, type ViewMode } from './types';
@@ -23,6 +23,9 @@ export class Store {
   search = $state('');
   settingsOpen = $state(false);
   reflectOpen = $state(false);
+  trashOpen = $state(false);
+  /** Reported by the Done tray so new arrivals can be spread out sensibly. */
+  doneTrayWidth = $state(600);
   toast = $state<{ id: number; text: string; undo?: () => void } | null>(null);
   dirty = $state(false);
   lastCompletedId = $state<Id | null>(null);
@@ -38,10 +41,14 @@ export class Store {
   private toastSeq = 0;
 
   // ---------- derived indexes ----------
+  /** Everything not in the trash. Most queries go through this. */
+  liveCards = $derived(this.doc.cards.filter((c) => c.deletedAt == null));
+  /** Includes trashed cards, so restore and parent lookups still work. */
   byId = $derived(new Map(this.doc.cards.map((c) => [c.id, c])));
+  trash = $derived(this.doc.cards.filter((c) => c.deletedAt != null).sort((a, b) => b.deletedAt! - a.deletedAt!));
   children = $derived.by(() => {
     const m = new Map<Id, Card[]>();
-    for (const c of this.doc.cards) {
+    for (const c of this.liveCards) {
       if (!c.parentId) continue;
       const arr = m.get(c.parentId) ?? [];
       arr.push(c);
@@ -49,16 +56,16 @@ export class Store {
     }
     return m;
   });
-  capIdx = $derived(buildCapacityIndex(this.doc.cards, this.doc.settings.defaultEffortPoints));
-  people = $derived(this.doc.cards.filter((c) => c.kind === 'person' && c.doneAt == null).sort((a, b) => a.title.localeCompare(b.title)));
-  openCards = $derived(this.doc.cards.filter((c) => c.doneAt == null));
-  doneCards = $derived(this.doc.cards.filter((c) => c.doneAt != null).sort((a, b) => b.doneAt! - a.doneAt!));
-  tags = $derived([...new Set(this.doc.cards.flatMap((c) => c.tags))].sort());
+  capIdx = $derived(buildCapacityIndex(this.liveCards, this.doc.settings.defaultEffortPoints));
+  people = $derived(this.liveCards.filter((c) => c.kind === 'person' && c.doneAt == null).sort((a, b) => a.title.localeCompare(b.title)));
+  openCards = $derived(this.liveCards.filter((c) => c.doneAt == null));
+  doneCards = $derived(this.liveCards.filter((c) => c.doneAt != null).sort((a, b) => b.doneAt! - a.doneAt!));
+  tags = $derived([...new Set(this.liveCards.flatMap((c) => c.tags))].sort());
   buckets = $derived([...this.doc.buckets].sort((a, b) => a.order - b.order));
   timeBuckets = $derived(this.buckets.filter((b) => b.kind === 'time'));
   loads = $derived.by(() => {
     const m = new Map<Id, BucketLoad>();
-    for (const b of this.buckets) m.set(b.id, bucketLoad(b, this.doc.cards, this.capIdx));
+    for (const b of this.buckets) m.set(b.id, bucketLoad(b, this.liveCards, this.capIdx));
     return m;
   });
   focusedId = $derived(this.focusStack.at(-1) ?? null);
@@ -77,6 +84,7 @@ export class Store {
   async init(): Promise<void> {
     const existing = await loadDoc();
     this.doc = existing ?? seedDoc();
+    this.purgeTrash();
     this.loaded = true;
     if (existing) void saveDailySnapshot($state.snapshot(this.doc));
     else this.scheduleSave();
@@ -153,6 +161,11 @@ export class Store {
   // ---------- queries ----------
   card(id: Id | null | undefined): Card | null {
     return id ? (this.byId.get(id) ?? null) : null;
+  }
+  /** Like card(), but null for anything in the trash. */
+  live(id: Id | null | undefined): Card | null {
+    const c = this.card(id);
+    return c && c.deletedAt == null ? c : null;
   }
   childrenOf(id: Id): Card[] {
     return this.children.get(id) ?? [];
@@ -302,14 +315,45 @@ export class Store {
     this.commit('complete', () => {
       c.doneAt = now;
       c.updatedAt = now;
-      // Done tray is a timeline: y comes from order, x is a random-ish spot for fun.
-      c.pos = { x: Math.round(hash01(c.id, 7) * 520), y: 0 };
+      // Done tray is a timeline: y comes from order; pick an x that overlaps the least.
+      c.pos = { x: this.doneSpotX(), y: 0 };
     });
     void tick().then(() => flyFrom(before));
     this.celebrate(centerOf(before.get(id)));
     this.lastCompletedId = id;
     if (this.selectedId === id) this.selectedId = null;
     this.showToast(`Done: ${c.title || 'untitled'}`, () => this.reopen(id));
+  }
+
+  /**
+   * Where a newly finished card lands in the Done timeline: among all x
+   * positions, find those that overlap the cards already near the top the
+   * least, then pick one of them at random so the pile doesn't look too neat.
+   */
+  private doneSpotX(): number {
+    const STEP = 34;
+    const H = 64;
+    const maxX = Math.max(0, this.doneTrayWidth - CARD_W - 8);
+    // Cards already done, in timeline order; after the shift they sit at y = 16 + (i+1)*STEP.
+    const recent = this.doneCards.filter((c) => c.kind !== 'person').slice(0, 8);
+    const overlapAt = (x: number) =>
+      recent.reduce((sum, r, i) => {
+        const w = Math.min(x + CARD_W, Math.min(r.pos.x, maxX) + CARD_W) - Math.max(x, Math.min(r.pos.x, maxX));
+        const h = H - (i + 1) * STEP;
+        return w > 0 && h > 0 ? sum + w * h : sum;
+      }, 0);
+    const candidates: number[] = [];
+    let best = Infinity;
+    for (let x = 0; x <= maxX; x += 6) {
+      const o = overlapAt(x);
+      if (o < best - 1) {
+        best = o;
+        candidates.length = 0;
+      }
+      if (o <= best + 1) candidates.push(x);
+    }
+    if (!candidates.length) return 0;
+    return candidates[Math.floor(Math.random() * candidates.length)];
   }
 
   private celebrate(at: { x: number; y: number } | null): void {
@@ -412,7 +456,7 @@ export class Store {
       for (const x of all) {
         x.doneAt = now;
         x.updatedAt = now;
-        x.pos = { x: Math.round(hash01(x.id, 7) * 520), y: 0 };
+        x.pos = { x: this.doneSpotX(), y: 0 };
       }
     });
     void tick().then(() => flyFrom(before));
@@ -428,19 +472,92 @@ export class Store {
     const doomed = new Set<Id>([id]);
     if (children === 'all') for (const d of this.descendantsOf(id)) doomed.add(d.id);
     const title = c.title;
+    const now = Date.now();
     this.commit('delete', () => {
       if (children === 'release') this.releaseChildren(id);
-      this.doc.cards = this.doc.cards.filter((x) => !doomed.has(x.id));
       for (const x of this.doc.cards) {
-        x.peopleIds = x.peopleIds.filter((p) => !doomed.has(p));
-        x.linkIds = x.linkIds.filter((l) => !doomed.has(l));
+        if (doomed.has(x.id)) {
+          x.deletedAt = now;
+          if (x.clusterId) {
+            const cl = x.clusterId;
+            x.clusterId = null;
+            this.pruneCluster(cl);
+          }
+        }
       }
     });
     if (this.selectedId && doomed.has(this.selectedId)) this.selectedId = null;
     if (this.editingId && doomed.has(this.editingId)) this.editingId = null;
     this.focusStack = this.focusStack.filter((f) => !doomed.has(f));
     const n = doomed.size;
-    this.showToast(`Deleted ${n > 1 ? `${n} cards` : title || 'card'}`, () => this.undo());
+    this.showToast(`Trashed ${n > 1 ? `${n} cards` : title || 'card'}`, () => this.undo());
+  }
+
+  // ---------- trash ----------
+  static TRASH_DAYS = 30;
+
+  /** Bring a card back from the trash, with any sub-items trashed alongside it. */
+  restore(id: Id): void {
+    const c = this.byId.get(id);
+    if (!c || c.deletedAt == null) return;
+    const group = [c, ...this.trashedDescendants(id)];
+    const before = captureRects();
+    this.commit('restore', () => {
+      for (const x of group) x.deletedAt = null;
+      const parent = c.parentId ? this.byId.get(c.parentId) : null;
+      if (c.parentId && (!parent || parent.deletedAt != null)) {
+        c.parentId = null;
+        c.bucketId = null;
+      }
+      if (!c.parentId) {
+        const bucketOk = c.bucketId && this.doc.buckets.some((b) => b.id === c.bucketId);
+        if (!bucketOk) c.bucketId = c.kind === 'person' ? (this.doc.buckets.find((b) => b.kind === 'people')?.id ?? this.defaultBucketId) : this.defaultBucketId;
+        if (c.doneAt == null) c.pos = this.freeSpot(c.bucketId!, c.id);
+      }
+      c.updatedAt = Date.now();
+    });
+    void tick().then(() => flyFrom(before));
+    this.showToast(`Restored ${c.title || 'card'}`, () => this.undo());
+  }
+
+  private trashedDescendants(id: Id): Card[] {
+    const out: Card[] = [];
+    const queue = [id];
+    const seen = new Set<Id>([id]);
+    while (queue.length) {
+      const cur = queue.shift()!;
+      for (const k of this.doc.cards) {
+        if (k.parentId === cur && k.deletedAt != null && !seen.has(k.id)) {
+          seen.add(k.id);
+          out.push(k);
+          queue.push(k.id);
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Permanently drop anything trashed more than TRASH_DAYS ago (or everything, when `all`). */
+  purgeTrash(all = false): void {
+    const cutoff = Date.now() - Store.TRASH_DAYS * 86_400_000;
+    const gone = new Set(this.doc.cards.filter((c) => c.deletedAt != null && (all || c.deletedAt < cutoff)).map((c) => c.id));
+    if (!gone.size) return;
+    const apply = () => {
+      this.doc.cards = this.doc.cards.filter((c) => !gone.has(c.id));
+      for (const x of this.doc.cards) {
+        x.peopleIds = x.peopleIds.filter((p) => !gone.has(p));
+        x.linkIds = x.linkIds.filter((l) => !gone.has(l));
+        if (x.parentId && gone.has(x.parentId)) {
+          x.parentId = null;
+          if (!x.bucketId) x.bucketId = this.defaultBucketId;
+        }
+      }
+    };
+    if (all) this.commit('empty trash', apply);
+    else {
+      apply();
+      this.scheduleSave();
+    }
   }
 
   duplicate(id: Id): Card | null {
@@ -455,8 +572,10 @@ export class Store {
     });
     const now = Date.now();
     copy.createdAt = copy.updatedAt = copy.touchedAt = now;
+    copy.deletedAt = null;
     this.commit('duplicate', () => this.doc.cards.push(copy));
     this.selectedId = copy.id;
+    this.focus(copy.id);
     return copy;
   }
 
@@ -483,7 +602,7 @@ export class Store {
     return c?.clusterId ? (this.doc.clusters.find((k) => k.id === c.clusterId) ?? null) : null;
   }
   clusterMembers(clusterId: Id): Card[] {
-    return this.doc.cards.filter((c) => c.clusterId === clusterId && c.doneAt == null);
+    return this.liveCards.filter((c) => c.clusterId === clusterId && c.doneAt == null);
   }
 
   /** Put `a` in `b`'s cluster (creating one if needed). */

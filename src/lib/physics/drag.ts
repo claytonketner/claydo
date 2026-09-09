@@ -28,7 +28,7 @@ export interface DragOptions extends DragEvents {
   /** Follow-spring stiffness while held; 1 = rigid. */
   follow?: number;
   enabled?: () => boolean;
-  /** Ignore drags starting inside these selectors (inputs, buttons). */
+  /** Ignore pointer-downs inside these selectors (inputs, buttons). */
   ignore?: string;
 }
 
@@ -43,6 +43,7 @@ export function draggable(node: HTMLElement, opts: DragOptions) {
   let raf = 0;
   let dropTimer: ReturnType<typeof setTimeout> | null = null;
   let lastEvent: PointerEvent | null = null;
+  let canDrag = true;
 
   const threshold = () => options.threshold ?? 3;
   const follow = () => options.follow ?? 0.6;
@@ -63,8 +64,9 @@ export function draggable(node: HTMLElement, opts: DragOptions) {
 
   function onPointerDown(e: PointerEvent) {
     if (e.button !== 0) return;
-    if (options.enabled && !options.enabled()) return;
     if (options.ignore && (e.target as HTMLElement).closest(options.ignore)) return;
+    // `enabled` only gates dragging; a plain click still reports through onClick.
+    canDrag = !options.enabled || options.enabled();
     pointerId = e.pointerId;
     startClient = { x: e.clientX, y: e.clientY };
     startPos = { x: node.offsetLeft, y: node.offsetTop };
@@ -82,7 +84,7 @@ export function draggable(node: HTMLElement, opts: DragOptions) {
     const dx = e.clientX - startClient.x;
     const dy = e.clientY - startClient.y;
     if (!dragging) {
-      if (Math.hypot(dx, dy) < threshold()) return;
+      if (!canDrag || Math.hypot(dx, dy) < threshold()) return;
       if (options.onStart?.(e) === false) {
         cleanup();
         return;

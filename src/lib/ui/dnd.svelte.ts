@@ -163,7 +163,8 @@ export function resolveDrop(cardId: string, node: HTMLElement, pos: { x: number;
         return;
       }
       const trayEl = elementUnder(e, `[data-drop="${key}"]`, node);
-      const rel = trayEl ? relativePos(node, trayEl) : undefined;
+      // Inside a popup the mini-trays aren't the board, so let the store pick a free spot.
+      const rel = trayEl && !trayEl.closest('.stage') ? relativePos(node, trayEl) : undefined;
       if (card.doneAt != null) {
         store.reopen(cardId);
         store.moveToBucket(cardId, val, rel);

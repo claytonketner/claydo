@@ -65,6 +65,9 @@ to take them along or release them back onto the board.
 one for its agenda: tick the checkbox to close an item, click its text to open
 it. Cards elsewhere that mention `@person` appear in that agenda too.
 
+**Trash.** Deleting sends a card to 🗑 in the top bar, where it can be restored
+for 30 days.
+
 **Done.** The Done tray is a timeline: finish a card (press `D`, click ✓, or
 drop it on the tray) and it lands at the top at a random spot, pushing older
 ones down. Slide them sideways to tidy up, or drag one back up to reopen it.
@@ -92,7 +95,7 @@ quarter / year, as a brick wall, a heatmap, and a copyable Markdown list.
 | `⇧1`–`⇧3` | value |
 | `←` `→` | move to previous / next timeframe |
 | `⌘D` | duplicate |
-| `⌫` | delete (undoable, asks about sub-todos) |
+| `⌫` | delete to trash (asks about sub-todos) |
 | `⌘Z` / `⇧⌘Z` | undo / redo |
 | `/` | filter |
 | `esc` | back / deselect |

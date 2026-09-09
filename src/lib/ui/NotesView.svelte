@@ -7,6 +7,14 @@
     bullet: boolean;
     parts: { text: string; href: string | null }[];
   }
+  /** Show only the host for links, so long URLs don't swamp a card. */
+  function label(href: string): string {
+    try {
+      return new URL(href).hostname.replace(/^www\./, '');
+    } catch {
+      return href;
+    }
+  }
 
   const lines = $derived.by((): Line[] => {
     const raw = text.split('\n').filter((l, i, arr) => l.trim() !== '' || (i > 0 && i < arr.length - 1));
@@ -27,7 +35,7 @@
       {#if line.bullet}<span class="dot">▪</span>{/if}
       <span class="body">
         {#each line.parts as p}
-          {#if p.href}<a href={p.href} target="_blank" rel="noopener" onpointerdown={(e) => e.stopPropagation()}>{p.text}</a>{:else}{p.text}{/if}
+          {#if p.href}<a href={p.href} target="_blank" rel="noopener" title={p.href} onpointerdown={(e) => e.stopPropagation()}>{label(p.href)}</a>{:else}{p.text}{/if}
         {/each}
       </span>
     </div>
