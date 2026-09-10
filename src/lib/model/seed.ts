@@ -16,8 +16,8 @@ export const DEFAULT_SETTINGS: Settings = {
 export function defaultBuckets(): Bucket[] {
   return [
     { id: 'today', name: 'Today', order: 0, budget: 8, kind: 'time' },
-    { id: 'week', name: 'This week', order: 1, budget: 30, kind: 'time' },
-    { id: 'soon', name: 'Soon-ish', order: 2, budget: 60, kind: 'time' },
+    { id: 'week', name: 'This week', order: 1, budget: 20, kind: 'time' },
+    { id: 'soon', name: 'Soon-ish', order: 2, budget: 40, kind: 'time' },
     { id: 'else', name: 'Everything else', order: 3, budget: null, kind: 'time' },
     { id: 'people', name: 'People', order: 4, budget: null, kind: 'people' },
     { id: 'ideas', name: 'Ideas', order: 5, budget: null, kind: 'ideas' },
