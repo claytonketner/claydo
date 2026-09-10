@@ -140,9 +140,9 @@ export function seedDoc(now = Date.now()): Doc {
 
   add({ title: 'A simpler way to track habits', kind: 'idea', bucket: 'ideas', pos: [16, 16], notes: 'Sketch out a lightweight weekly view instead of daily checkboxes.' });
 
-  add({ title: 'Book the venue', bucket: 'today', done: 1, effort: 2 });
-  add({ title: 'Renew car registration', bucket: 'week', done: 3, effort: 3, value: 2 });
-  add({ title: 'Send meeting notes to the team', bucket: 'week', done: 6, effort: 1 });
+  add({ title: 'Book the venue', bucket: 'today', pos: [16, 16], done: 1, effort: 2 });
+  add({ title: 'Renew car registration', bucket: 'week', pos: [190, 16], done: 3, effort: 3, value: 2 });
+  add({ title: 'Send meeting notes to the team', bucket: 'week', pos: [364, 16], done: 6, effort: 1 });
 
   return doc;
 }
