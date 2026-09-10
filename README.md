@@ -1,5 +1,7 @@
 # Claydo
 
+**[Open the app →](https://claytonketner.github.io/claydo/)**
+
 A spatial, sticky-note style TODO board. Drag cards between timeframes, nest
 sub-todos, keep a running agenda per person, and watch the capacity meter tell
 you when Today is oversubscribed. Runs entirely in your browser, no server, no
