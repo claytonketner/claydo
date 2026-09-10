@@ -119,7 +119,7 @@ export function seedDoc(now = Date.now()): Doc {
     effort: 2,
     value: 3,
     tags: ['meta'],
-    notes: 'Drag me around. Double click to edit.\n- Try dropping a card onto another to nest it\n- Have fun!',
+    notes: 'Drag me around. Double click to edit.\n- Try dropping a card onto another to nest it\n- When a card is selected you can change the value and effort levels',
     children: [
       { title: 'Try the quick-add bar', notes: 'Type: "Call the plumber @sam #home !s *3 >today"', pos: [16, 250] },
       { title: 'Switch views with the buttons up top', pos: [190, 250] },
