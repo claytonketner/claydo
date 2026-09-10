@@ -45,6 +45,9 @@
   const kids = $derived(store.childrenOf(card.id));
   const openKids = $derived(kids.filter((k) => k.doneAt == null));
   const parent = $derived(card.parentId ? store.card(card.parentId) : null);
+  const isChild = $derived(!popup && parent != null);
+  /** The popup already frames a card as a sub-todo, so only board cards wear the tab. */
+  const childTab = $derived(isChild && showParent ? parent : null);
   const bucket = $derived(store.bucketOf(card));
   const stale = $derived(store.doc.settings.agingEnabled && card.kind === 'todo' && !done && bucket?.kind === 'time' ? staleStage(card.createdAt) : 0);
   const rot = $derived(popup ? '0' : (hash01(card.id) * 3 - 1.5).toFixed(2));
@@ -194,6 +197,7 @@
   class:clustered={!!cluster}
   class:agenda-item={agendaItem}
   class:has-kids={kids.length > 0 && card.kind !== 'person' && !popup}
+  class:is-child={isChild}
   style:--rot="{rot}deg"
   style:--cluster={cluster?.color ?? undefined}
   style:left={layout === 'free' ? `${x}px` : undefined}
@@ -219,6 +223,12 @@
       {/if}
       <button class="tool del" title="Delete" onclick={() => store.requestDelete(card.id)}>✕</button>
     </div>
+  {/if}
+
+  {#if childTab}
+    <button class="child-tab" title="Part of: {childTab.title}" onclick={() => store.focus(childTab.id)}>
+      <span class="hook">↳</span><span class="of">{childTab.title || '(untitled)'}</span>
+    </button>
   {/if}
 
   <div class="content" use:clipWatch>
@@ -259,9 +269,6 @@
 
     {#if !popup}
       <div class="links">
-        {#if parent && showParent}
-          <button class="parent-chip" title="Part of: {parent.title}" onclick={() => store.focus(parent.id)}><span class="arrow">↰</span> {parent.title}</button>
-        {/if}
         {#if card.parentId && card.bucketId && bucket && showParent === false}
           <span class="sched-chip">{bucket.name}</span>
         {/if}
@@ -382,6 +389,49 @@
     border-right: var(--border) solid var(--line);
     border-bottom: var(--border) solid var(--line);
     transform: rotate(45deg);
+  }
+  /* Sub-todos share a tray with the cards they belong to, so they read as a tier down: paler stock, smaller type, less lift. */
+  .card.is-child {
+    --paper-now: var(--paper-child);
+    box-shadow: 2px 2px 0 var(--shadow);
+  }
+  .card.is-child .title {
+    font-size: 11.5px;
+  }
+  .child-tab {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: calc(100% + 18px);
+    margin: -8px -9px 6px;
+    padding: 3px 9px 2px;
+    border: 0;
+    border-bottom: 1.5px dashed rgba(43, 36, 24, 0.3);
+    border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+    background: rgba(43, 36, 24, 0.08);
+    color: #6b5f4d;
+    font-family: inherit;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-align: left;
+    cursor: pointer;
+  }
+  .child-tab:hover {
+    background: rgba(43, 36, 24, 0.16);
+    color: #2b2418;
+  }
+  .hook {
+    flex: none;
+    font-size: 12px;
+    line-height: 1;
+    text-transform: none;
+  }
+  .of {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .card.done {
     --paper-now: #ecf7ea;
@@ -623,10 +673,6 @@
   .links:not(:empty) {
     margin-top: 6px;
   }
-  .arrow {
-    font-size: 12px;
-    line-height: 1;
-  }
   .card.has-kids {
     padding-bottom: 12px;
   }
@@ -664,23 +710,6 @@
     line-height: 10px;
     font-weight: 900;
     text-align: center;
-  }
-  .parent-chip {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    border: 0;
-    background: rgba(43, 36, 24, 0.08);
-    border-radius: 3px;
-    font-size: 10px;
-    color: #4b4232;
-    padding: 2px 5px;
-    cursor: pointer;
-    text-align: left;
-  }
-  .parent-chip:hover {
-    background: rgba(43, 36, 24, 0.16);
   }
   .sched-chip {
     display: inline-block;

@@ -1,7 +1,6 @@
 import { CARD_H, CARD_W } from '../model/types';
 import { store } from '../model/store.svelte';
 import { elementUnder, overlapRatio, type Rect } from '../physics/drag';
-import { cardHeights } from './ui.svelte';
 
 /** Cards this close (px gap, or overlapping) "stick" together as a group. */
 export const GROUP_GAP = 22;
@@ -242,7 +241,8 @@ function resolveAnchor(cardId: string, node: HTMLElement, pos: { x: number; y: n
       store.setPos(cardId, card.doneAt != null ? { x: p.x, y: 0 } : p);
     }
     settleGrouping(cardId, target, dnd.intent);
-    if (ctx.free && card.doneAt == null && card.bucketId) pendingRelayout = card.bucketId;
+    // A sub-todo inheriting its parent's bucket has no bucketId of its own, but it still sits on that tray.
+    if (ctx.free && card.doneAt == null) pendingRelayout = store.bucketOf(card)?.id ?? null;
     return;
   }
 
@@ -361,7 +361,7 @@ export function relayoutTray(bucketId: string, anchorId: string): void {
     fixed: boolean;
     offsets: { id: string; dx: number; dy: number }[];
   }
-  const hOf = (id: string) => cardHeights[id] ?? CARD_H;
+  const hOf = (id: string) => store.cardHeights[id] ?? CARD_H;
   const byCluster = new Map<string, typeof cards>();
   const singles: typeof cards = [];
   for (const c of cards) {

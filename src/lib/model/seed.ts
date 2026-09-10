@@ -121,9 +121,9 @@ export function seedDoc(now = Date.now()): Doc {
     tags: ['meta'],
     notes: 'Drag me around. Double click to edit.\n- Try dropping a card onto another to nest it\n- Have fun!',
     children: [
-      { title: 'Try the quick-add bar', notes: 'Type: "Call the plumber @sam #home !s *3 >today"' },
-      { title: 'Switch views with the buttons up top' },
-      { title: 'Give a sub-todo its own timeframe', bucket: 'week' }
+      { title: 'Try the quick-add bar', notes: 'Type: "Call the plumber @sam #home !s *3 >today"', pos: [16, 250] },
+      { title: 'Switch views with the buttons up top', pos: [190, 250] },
+      { title: 'Give a sub-todo its own timeframe', bucket: 'week', pos: [190, 16] }
     ]
   });
   add({ title: 'Reply to Sam\'s email', bucket: 'today', pos: [190, 16], effort: 1, ageDays: 1 });

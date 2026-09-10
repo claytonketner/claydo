@@ -1,5 +1,6 @@
 <script lang="ts">
   import { store } from '../model/store.svelte';
+  import ChildLinks from './ChildLinks.svelte';
   import Masonry from './Masonry.svelte';
   import Section from './Section.svelte';
 
@@ -18,6 +19,7 @@
   {#if doneBucket}
     <Section bucket={doneBucket} filter={store.search} />
   {/if}
+  <ChildLinks />
 </div>
 
 <style>

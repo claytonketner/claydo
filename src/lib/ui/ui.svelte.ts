@@ -1,3 +1,5 @@
+import { store } from '../model/store.svelte';
+
 /** Tiny registry so distant components can ask inputs to take focus. */
 export const ui = $state({
   hoveredId: null as string | null,
@@ -7,18 +9,15 @@ export const ui = $state({
   wantAgendaFocusId: null as string | null
 });
 
-/** Live rendered heights of cards, keyed by id, so free-layout trays can grow to fit. */
-export const cardHeights = $state<Record<string, number>>({});
-
 /**
- * Action: report this element's height into `cardHeights`. Pass null to opt
- * out (popup / flow copies of a card must not overwrite or clear the board
- * instance's entry, since trays size themselves from it).
+ * Action: report this element's height into `store.cardHeights`, which trays size
+ * themselves from and placement reads. Pass null to opt out (popup / flow copies of
+ * a card must not overwrite or clear the board instance's entry).
  */
 export function measureCard(node: HTMLElement, id: string | null) {
   let cur = id;
   const report = () => {
-    if (cur) cardHeights[cur] = node.offsetHeight;
+    if (cur) store.cardHeights[cur] = node.offsetHeight;
   };
   report();
   const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(report) : null;
@@ -26,14 +25,14 @@ export function measureCard(node: HTMLElement, id: string | null) {
   return {
     update(next: string | null) {
       if (next !== cur) {
-        if (cur) delete cardHeights[cur];
+        if (cur) delete store.cardHeights[cur];
         cur = next;
         report();
       }
     },
     destroy() {
       ro?.disconnect();
-      if (cur) delete cardHeights[cur];
+      if (cur) delete store.cardHeights[cur];
     }
   };
 }

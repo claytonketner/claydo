@@ -19,6 +19,7 @@
   --paper-2: #ffe9a8;
   --paper-person: #dcedff;
   --paper-idea: #e6f5d8;
+  --paper-child: #f4ecd2;
   --paper-stale-1: #f6e6a6;
   --paper-stale-2: #ecd68e;
   --paper-stale-3: #dcc277;
@@ -70,6 +71,7 @@
     --paper-2: #ecd57f;
     --paper-person: #bcd6f5;
     --paper-idea: #cfe8b8;
+    --paper-child: #e6d9ab;
     --paper-stale-1: #e7d38c;
     --paper-stale-2: #d3bc70;
     --paper-stale-3: #b9a35c;
@@ -96,6 +98,7 @@
   --paper-2: #ecd57f;
   --paper-person: #bcd6f5;
   --paper-idea: #cfe8b8;
+  --paper-child: #e6d9ab;
   --paper-stale-1: #e7d38c;
   --paper-stale-2: #d3bc70;
   --paper-stale-3: #b9a35c;
