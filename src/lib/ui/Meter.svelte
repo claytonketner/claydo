@@ -43,6 +43,7 @@
     align-items: center;
     gap: 6px;
     font-size: 11px;
+    line-height: 1;
     font-family: var(--font-mono);
     color: var(--ink-soft);
     white-space: nowrap;

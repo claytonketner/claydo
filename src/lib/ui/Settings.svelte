@@ -319,9 +319,12 @@
     gap: 24px;
   }
   .help {
-    margin: 0 0 8px;
+    margin: 0;
     font-size: 12px;
     color: var(--ink-faint);
+  }
+  p.help {
+    margin: 0 0 8px;
   }
   .row {
     display: flex;

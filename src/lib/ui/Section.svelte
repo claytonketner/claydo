@@ -192,6 +192,7 @@
   .count {
     font-family: var(--font-mono);
     font-size: 11px;
+    line-height: 1;
     color: var(--ink-faint);
   }
   .spacer {

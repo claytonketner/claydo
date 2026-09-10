@@ -91,7 +91,7 @@
         <div class="stat"><b>{heat.filter((h) => h.v > 0).length}</b><span>active days</span></div>
       </div>
 
-      <h3>Every day</h3>
+      <h3>Heatmap</h3>
       <div class="heat" style:--cols={Math.min(heat.length, 53)}>
         {#each heat as h}
           <span class="cell l{h.level}" title="{fmt(h.date)}: {h.v}"></span>
