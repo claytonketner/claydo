@@ -361,6 +361,9 @@ export class Store {
   // ---------- mutations ----------
   addCard(input: Partial<Card> & { title: string }, opts: { select?: boolean; edit?: boolean } = {}): Card {
     const card = newCard(input);
+    if (card.parentId && this.byId.get(card.parentId)?.kind === 'person' && !card.peopleIds.includes(card.parentId)) {
+      card.peopleIds = [...card.peopleIds, card.parentId];
+    }
     if (!card.parentId && !card.bucketId) card.bucketId = this.defaultBucketId;
     if (card.bucketId && input.pos === undefined) card.pos = this.freeSpot(card.bucketId);
     this.commit('add card', () => this.doc.cards.push(card));
@@ -445,6 +448,9 @@ export class Store {
       }
       child.parentId = parentId;
       child.bucketId = null;
+      if (parent.kind === 'person' && !child.peopleIds.includes(parentId)) {
+        child.peopleIds = [...child.peopleIds, parentId];
+      }
       if (oldCluster) {
         child.clusterId = null;
         this.pruneCluster(oldCluster);
