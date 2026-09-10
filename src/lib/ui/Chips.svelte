@@ -6,6 +6,7 @@
   let { card, editable = false }: { card: Card; editable?: boolean } = $props();
 
   const people = $derived(card.peopleIds.map((id) => store.live(id)).filter((p): p is Card => !!p));
+  const sizable = $derived(!store.isAgendaItem(card));
   const initials = (name: string) =>
     name
       .split(/\s+/)
@@ -16,7 +17,7 @@
 </script>
 
 <div class="chips" class:editable>
-  {#if editable || card.effort != null}
+  {#if sizable && (editable || card.effort != null)}
     <span class="chip effort" title="Effort (1–5 keys)">
       {#each [1, 2, 3, 4, 5] as const as e}
         <button
@@ -34,7 +35,7 @@
       <span class="lbl">{card.effort ? EFFORT_LABELS[card.effort] : '·'}</span>
     </span>
   {/if}
-  {#if editable || card.value != null}
+  {#if sizable && (editable || card.value != null)}
     <span class="chip value" title="Value (⇧1–3)">
       {#each [1, 2, 3] as const as v}
         <button

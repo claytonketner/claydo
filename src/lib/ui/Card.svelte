@@ -51,6 +51,12 @@
   const x = $derived(Math.min(card.pos.x, Math.max(0, maxX)));
   const top = $derived(y ?? card.pos.y);
   const mentions = $derived(card.kind === 'person' ? store.mentionsOf(card.id) : []);
+  const agendaItem = $derived(store.isAgendaItem(card));
+  /** Agenda items carry no effort/value, so their foot only earns space when there are tags or people. */
+  const showFoot = $derived(
+    card.kind !== 'person' &&
+      (agendaItem ? card.tags.length > 0 || card.peopleIds.length > 0 : selected || popup || card.effort != null || card.value != null || card.tags.length > 0 || card.peopleIds.length > 0)
+  );
   const cluster = $derived(card.clusterId ? store.clusterOf(card.id) : null);
   // svelte-ignore state_referenced_locally
   const fresh = !popup && Date.now() - card.createdAt < 1500;
@@ -186,6 +192,7 @@
   class:group-target={groupTarget}
   class:nest-target={nestTarget}
   class:clustered={!!cluster}
+  class:agenda-item={agendaItem}
   class:has-kids={kids.length > 0 && card.kind !== 'person' && !popup}
   style:--rot="{rot}deg"
   style:--cluster={cluster?.color ?? undefined}
@@ -244,7 +251,7 @@
       <div class="discuss">{openKids.length + mentions.length} to discuss</div>
     {/if}
 
-    {#if card.kind !== 'person' && (selected || popup || card.effort != null || card.value != null || card.tags.length || card.peopleIds.length)}
+    {#if showFoot}
       <div class="foot">
         <Chips {card} editable={(selected || popup) && !done} />
       </div>
@@ -358,6 +365,23 @@
   .card.kind-idea {
     --paper-now: var(--paper-idea);
     border-style: dashed;
+  }
+  /* A talking point, not a task: speech bubble in the person palette. */
+  .card.agenda-item {
+    --paper-now: var(--paper-person);
+    border-radius: 12px;
+  }
+  .card.agenda-item::after {
+    content: '';
+    position: absolute;
+    left: 20px;
+    bottom: -8px;
+    width: 13px;
+    height: 13px;
+    background: var(--paper-custom, var(--paper-now));
+    border-right: var(--border) solid var(--line);
+    border-bottom: var(--border) solid var(--line);
+    transform: rotate(45deg);
   }
   .card.done {
     --paper-now: #ecf7ea;

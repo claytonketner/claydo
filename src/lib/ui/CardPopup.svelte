@@ -18,6 +18,7 @@
   const inherited = $derived(shown.filter((k) => k.bucketId == null));
   const parent = $derived(card?.parentId ? store.card(card.parentId) : null);
   const parentIsPerson = $derived(parent?.kind === 'person');
+  const isAgendaItem = $derived(!!card && store.isAgendaItem(card));
   const bucket = $derived(card ? store.bucketOf(card) : null);
   const timeBuckets = $derived(store.timeBuckets);
   const ideasBucket = $derived(store.buckets.find((b) => b.kind === 'ideas') ?? null);
@@ -83,10 +84,10 @@
 {#if card}
   <div class="popup px" role="dialog" aria-label={card.title}>
     <nav class="bar">
-      <span class="crumb">{isPerson ? 'Person' : card.kind === 'idea' ? 'Idea' : 'Todo'}</span>
+      <span class="crumb">{isPerson ? 'Person' : card.kind === 'idea' ? 'Idea' : isAgendaItem ? 'Agenda item' : 'Todo'}</span>
       {#if parent}<span class="sep">·</span><button class="btn ghost sm" onclick={() => store.focus(parent.id)}>↰ {parent.title || 'untitled'}</button>{/if}
       <span class="spacer"></span>
-      {#if !isPerson}<span class="hint">Drag this card or a sub-todo out of this window and hold to place it on the board</span>{/if}
+      {#if !isPerson}<span class="hint">{isAgendaItem ? 'Drag it out of this window and hold to make it a todo on the board' : 'Drag this card or a sub-todo out of this window and hold to place it on the board'}</span>{/if}
       <button class="btn sm" onclick={() => store.popFocus()}>close <span class="kbd">esc</span></button>
     </nav>
 
@@ -97,22 +98,24 @@
 
       <div class="side">
         {#if !isPerson}
-          <div class="row">
-            <span class="lbl">Effort</span>
-            <div class="seg">
-              {#each [1, 2, 3, 4, 5] as const as e}
-                <button class="btn sm" class:active={card.effort === e} onclick={() => store.setEffort(card.id, e)}>{EFFORT_LABELS[e]}</button>
-              {/each}
+          {#if !isAgendaItem}
+            <div class="row">
+              <span class="lbl">Effort</span>
+              <div class="seg">
+                {#each [1, 2, 3, 4, 5] as const as e}
+                  <button class="btn sm" class:active={card.effort === e} onclick={() => store.setEffort(card.id, e)}>{EFFORT_LABELS[e]}</button>
+                {/each}
+              </div>
             </div>
-          </div>
-          <div class="row">
-            <span class="lbl">Value</span>
-            <div class="seg">
-              {#each [1, 2, 3] as const as v}
-                <button class="btn sm star" class:active={card.value != null && card.value >= v} onclick={() => store.setValue(card.id, v)}>★</button>
-              {/each}
+            <div class="row">
+              <span class="lbl">Value</span>
+              <div class="seg">
+                {#each [1, 2, 3] as const as v}
+                  <button class="btn sm star" class:active={card.value != null && card.value >= v} onclick={() => store.setValue(card.id, v)}>★</button>
+                {/each}
+              </div>
             </div>
-          </div>
+          {/if}
           <div class="row">
             <span class="lbl">When</span>
             <select value={card.bucketId ?? 'inherit'} onchange={(e) => setBucket((e.target as HTMLSelectElement).value)}>
@@ -124,10 +127,8 @@
               {#each timeBuckets as b (b.id)}<option value={b.id}>{b.name}</option>{/each}
               {#if ideasBucket}<option value={ideasBucket.id}>{ideasBucket.name}</option>{/if}
             </select>
+            {#if isAgendaItem}<span class="note">Agenda items don't show on the main board</span>{/if}
           </div>
-          {#if parentIsPerson && card.bucketId == null}
-            <div class="row help">Lives on {parent?.title}'s agenda only. It stays hidden on the main board until you give it a timeframe.</div>
-          {/if}
           <div class="row">
             <span class="lbl">Tags</span>
             <div class="chips">
@@ -176,14 +177,14 @@
         <h3 class="display">Agenda <span class="count">{open.length + mentions.length}</span></h3>
         <div class="agenda-list">
           {#each open as item (item.id)}
-            <div class="item">
+            <div class="item" class:external={item.bucketId != null}>
               <input type="checkbox" onchange={() => store.requestComplete(item.id)} title="Done" />
-              <button class="item-title" onclick={() => store.focus(item.id)}>{item.title}</button>
+              <button class="item-title" onclick={() => store.focus(item.id)}>{#if item.bucketId != null}↗ {/if}{item.title}</button>
               {#if item.bucketId}<span class="badge small">{store.bucketOf(item)?.name}</span>{/if}
             </div>
           {/each}
           {#each mentions as m (m.id)}
-            <div class="item mention">
+            <div class="item external">
               <input type="checkbox" onchange={() => store.requestComplete(m.id)} title="Done" />
               <button class="item-title" onclick={() => store.focus(m.id)}>↗ {m.title}</button>
               <span class="badge small">{store.bucketOf(m)?.name ?? ''}</span>
@@ -302,13 +303,9 @@
     gap: 8px;
     flex-wrap: wrap;
   }
-  .row.help {
-    font-size: 12px;
+  .note {
+    font-size: 11.5px;
     color: var(--ink-soft);
-    padding: 6px 8px;
-    border-left: 3px solid var(--accent-2);
-    background: rgba(74, 155, 255, 0.08);
-    border-radius: 0 4px 4px 0;
   }
   .lbl {
     width: 58px;
@@ -559,7 +556,7 @@
   .item-title:hover {
     text-decoration: underline;
   }
-  .item.mention .item-title {
+  .item.external .item-title {
     color: var(--accent-2);
   }
   .agenda .add {

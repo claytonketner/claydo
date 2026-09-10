@@ -315,6 +315,10 @@ export class Store {
   cardsInBucket(bucketId: Id): Card[] {
     return this.openCards.filter((c) => c.bucketId === bucketId);
   }
+  /** A talking point living on a person's agenda only: no timeframe, so it never reaches the board. */
+  isAgendaItem(card: Card): boolean {
+    return card.bucketId == null && this.card(card.parentId)?.kind === 'person';
+  }
   /** Cards elsewhere on the board that reference this person. */
   mentionsOf(personId: Id): Card[] {
     return this.openCards.filter((c) => c.peopleIds.includes(personId) && c.parentId !== personId);
