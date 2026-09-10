@@ -1,6 +1,6 @@
 const DAY = 86_400_000;
 
-/** Age since creation: 0 fresh, 1 yellowing (>7d), 2 cracked (>14d), 3 cobwebbed (>30d). */
+/** Age since creation: 0 fresh, 1 yellowed (>7d), 2 cobwebbed (>14d), 3 deeper yellow and more cobwebs (>30d). */
 export type StaleStage = 0 | 1 | 2 | 3;
 
 export const STALE_THRESHOLDS_DAYS = [7, 14, 30] as const;

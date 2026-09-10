@@ -298,16 +298,27 @@
   {/if}
 
   {#if stale >= 2}
-    <svg class="cracks" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      <path d="M2 30 L14 34 L22 26 L31 40" />
-      <path d="M96 12 L88 24 L92 36" />
-      {#if stale >= 3}
-        <path d="M60 98 L64 84 L58 76 L70 66" />
-        <path d="M4 70 L10 74 L8 84" />
-      {/if}
-    </svg>
+    <svg class="web web-tl" viewBox="0 0 40 40" aria-hidden="true">{@render web()}</svg>
+  {/if}
+  {#if stale >= 3}
+    <svg class="web web-br" viewBox="0 0 40 40" aria-hidden="true">{@render web()}</svg>
   {/if}
 </div>
+
+<!-- One corner web: spokes fanning out from the corner, silk strands sagging between them. -->
+{#snippet web()}
+  <g>
+    <path d="M0 0L40 0" />
+    <path d="M0 0L37 15.3" />
+    <path d="M0 0L28.3 28.3" />
+    <path d="M0 0L15.3 37" />
+    <path d="M0 0L0 40" />
+    <path d="M13 0Q11.1 2.2 12 5Q9.4 6.3 9.2 9.2Q6.3 9.4 5 12Q2.2 11.1 0 13" />
+    <path d="M22 0Q18.8 3.7 20.3 8.4Q15.9 10.6 15.6 15.6Q10.6 15.9 8.4 20.3Q3.7 18.8 0 22" />
+    <path d="M31 0Q26.5 5.3 28.6 11.9Q22.4 15 21.9 21.9Q15 22.4 11.9 28.6Q5.3 26.5 0 31" />
+    <path d="M40 0Q34.1 6.8 37 15.3Q28.9 19.3 28.3 28.3Q19.3 28.9 15.3 37Q6.8 34.1 0 40" />
+  </g>
+{/snippet}
 
 <style>
   .card {
@@ -768,16 +779,27 @@
     pointer-events: none;
   }
 
-  .cracks {
+  .web {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    width: 34px;
+    height: 34px;
     pointer-events: none;
     fill: none;
-    stroke: rgba(43, 36, 24, 0.45);
-    stroke-width: 0.8;
+    stroke: rgba(60, 50, 34, 0.3);
+    stroke-width: 0.55;
     stroke-linejoin: round;
     stroke-linecap: round;
+  }
+  .card.stale-3 .web {
+    stroke: rgba(60, 50, 34, 0.42);
+  }
+  .web-tl {
+    top: 2px;
+    left: 2px;
+  }
+  .web-br {
+    right: 2px;
+    bottom: 2px;
+    rotate: 180deg;
   }
 </style>

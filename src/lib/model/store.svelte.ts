@@ -592,7 +592,7 @@ export class Store {
     }));
   }
 
-  /** Reset a cracked old card to like-new. */
+  /** Reset a yellowed, cobwebbed old card to like-new. */
   refresh(id: Id): void {
     const now = Date.now();
     this.updateCard(id, { createdAt: now }, { label: 'refresh' });
