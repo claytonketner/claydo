@@ -250,6 +250,8 @@
         </section>
       </div>
 
+      <hr class="divider" />
+
       <section class="keys">
         <h3>Keyboard</h3>
         <div class="keygrid">
@@ -400,6 +402,11 @@
   .folder.warn {
     border-color: var(--warn);
     background: rgba(242, 177, 52, 0.12);
+  }
+  .divider {
+    margin: 18px 0 0;
+    border: none;
+    border-top: 1.5px solid var(--tray-line);
   }
   .keys {
     margin-top: 12px;

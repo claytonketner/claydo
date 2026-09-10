@@ -364,7 +364,7 @@
     opacity: 0.9;
     border-color: rgba(43, 36, 24, 0.55);
   }
-  .card.done .content {
+  .card.done:not(.popup) .content {
     max-height: 60px;
   }
   .card.done .title {

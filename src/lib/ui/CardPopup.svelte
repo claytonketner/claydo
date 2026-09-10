@@ -13,7 +13,9 @@
   const kids = $derived(card ? store.childrenOf(card.id) : []);
   const open = $derived(kids.filter((k) => k.doneAt == null));
   const doneKids = $derived(kids.filter((k) => k.doneAt != null).sort((a, b) => b.doneAt! - a.doneAt!));
-  const inherited = $derived(open.filter((k) => k.bucketId == null));
+  /** Once the card itself is done, show its whole sub-todo tree (done included) instead of collapsing it away. */
+  const shown = $derived(card?.doneAt != null ? kids : open);
+  const inherited = $derived(shown.filter((k) => k.bucketId == null));
   const parent = $derived(card?.parentId ? store.card(card.parentId) : null);
   const parentIsPerson = $derived(parent?.kind === 'person');
   const bucket = $derived(card ? store.bucketOf(card) : null);
@@ -216,7 +218,7 @@
             </div>
           </section>
           {#each [...timeBuckets, ...(ideasBucket ? [ideasBucket] : [])] as b (b.id)}
-            {@const here = open.filter((k) => k.bucketId === b.id)}
+            {@const here = shown.filter((k) => k.bucketId === b.id)}
             <section class="mini kind-{b.kind}" class:over={isTop && dnd.overDropKey === `bucket:${b.id}` && dnd.intent === 'none'}>
               <header><h4 class="display">{b.name}</h4><span class="count">{here.length}</span></header>
               <div class="flow" data-drop={isTop ? `bucket:${b.id}` : undefined}>
@@ -227,7 +229,7 @@
             </section>
           {/each}
         </div>
-        {#if doneKids.length}
+        {#if doneKids.length && card?.doneAt == null}
           <details class="done">
             <summary>Done ({doneKids.length})</summary>
             {#each doneKids as d (d.id)}
