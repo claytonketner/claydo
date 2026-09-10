@@ -27,6 +27,10 @@ export class Store {
   trashOpen = $state(false);
   /** Reported by the Done tray so new arrivals can be spread out sensibly. */
   doneTrayWidth = $state(600);
+  /** Live tray body widths, so a free spot lands inside the tray instead of off its right edge. */
+  trayWidths = $state<Record<Id, number>>({});
+  /** Rendered card heights reported by the board; cards vary a lot with notes and chips. */
+  cardHeights = $state<Record<Id, number>>({});
   toast = $state<{ id: number; text: string; undo?: () => void } | null>(null);
   dirty = $state(false);
   lastCompletedId = $state<Id | null>(null);
@@ -86,6 +90,40 @@ export class Store {
   focusedId = $derived(this.focusStack.at(-1) ?? null);
   focused = $derived(this.focusedId ? (this.byId.get(this.focusedId) ?? null) : null);
   selected = $derived(this.selectedId ? (this.byId.get(this.selectedId) ?? null) : null);
+  /**
+   * The card the connector lines root at. Keyed on the family rather than the
+   * selection itself, so clicking a sub-todo lights up the same set of threads
+   * as clicking its parent.
+   */
+  linkedParentId = $derived(this.selected ? (this.selected.parentId ?? this.selected.id) : null);
+  /**
+   * Every parent→child edge under that card, breadth-first, so a thread reaching a
+   * sub-todo carries on into its own sub-todos. `depth` and `sib` let the drawing
+   * cascade outward a generation at a time. A person's agenda items aren't on the
+   * board, so they get no threads.
+   */
+  linkedEdges = $derived.by(() => {
+    const root = this.linkedParentId;
+    const start = root ? this.byId.get(root) : null;
+    if (!root || !start || start.kind === 'person') return [];
+    const out: { parentId: Id; childId: Id; depth: number; sib: number }[] = [];
+    const seen = new Set<Id>([root]);
+    let frontier = [root];
+    for (let depth = 0; frontier.length; depth++) {
+      const next: Id[] = [];
+      for (const pid of frontier) {
+        let sib = 0;
+        for (const k of this.childrenOf(pid)) {
+          if (k.doneAt != null || seen.has(k.id)) continue;
+          seen.add(k.id);
+          out.push({ parentId: pid, childId: k.id, depth, sib: sib++ });
+          next.push(k.id);
+        }
+      }
+      frontier = next;
+    }
+    return out;
+  });
   canUndo = $derived.by(() => {
     void this.doc;
     return this.history.canUndo;
@@ -311,9 +349,14 @@ export class Store {
     const bid = effectiveBucketId(card, this.byId);
     return bid ? (this.doc.buckets.find((b) => b.id === bid) ?? null) : null;
   }
-  /** Cards that show on a bucket tray in the default view: explicit bucket, not done. */
+  /**
+   * Cards that show on a bucket tray in the default view. Sub-todos count too,
+   * under their own bucket if they have one and their parent's otherwise — except
+   * a person's agenda items, which belong to the person card, not the People tray.
+   */
   cardsInBucket(bucketId: Id): Card[] {
-    return this.openCards.filter((c) => c.bucketId === bucketId);
+    const isPeople = this.doc.buckets.find((b) => b.id === bucketId)?.kind === 'people';
+    return this.openCards.filter((c) => effectiveBucketId(c, this.byId) === bucketId && (!isPeople || c.kind === 'person'));
   }
   /** A talking point living on a person's agenda only: no timeframe, so it never reaches the board. */
   isAgendaItem(card: Card): boolean {
@@ -344,18 +387,26 @@ export class Store {
 
   /** First grid cell in a tray not overlapping an existing card. */
   freeSpot(bucketId: Id, excludeId?: Id): { x: number; y: number } {
-    const others = this.cardsInBucket(bucketId).filter((c) => c.id !== excludeId);
-    const gx = CARD_W + 14;
-    const gy = CARD_H + 14;
-    for (let row = 0; row < 40; row++) {
-      for (let col = 0; col < 6; col++) {
-        const x = 16 + col * gx;
-        const y = 16 + row * gy;
-        const clash = others.some((o) => Math.abs(o.pos.x - x) < CARD_W * 0.6 && Math.abs(o.pos.y - y) < CARD_H * 0.6);
+    const gap = 14;
+    // A card whose x sits past the tray's right edge renders clamped to it, so compare against where
+    // things actually land — otherwise every column past the edge resolves to the same spot.
+    const maxX = Math.max(0, (this.trayWidths[bucketId] ?? 600) - CARD_W - 8);
+    const taken = this.cardsInBucket(bucketId)
+      .filter((c) => c.id !== excludeId)
+      .map((c) => ({ x: Math.min(c.pos.x, maxX), y: c.pos.y, h: this.cardHeights[c.id] ?? CARD_H }));
+    const cols = Math.max(1, Math.floor((maxX - 16) / (CARD_W + gap)) + 1);
+    // Rows tuck up under whatever is already there rather than stepping by a fixed height,
+    // so one tall card doesn't leave a band of dead tray below it.
+    const rows = [...new Set([16, ...taken.map((o) => o.y + o.h + gap)])].sort((a, b) => a - b);
+    for (const y of rows) {
+      for (let col = 0; col < cols; col++) {
+        const x = 16 + col * (CARD_W + gap);
+        // The new card's own height is unknown until it renders, so reserve at least a default card's worth.
+        const clash = taken.some((o) => x < o.x + CARD_W + gap && o.x < x + CARD_W + gap && y < o.y + o.h + gap && o.y < y + CARD_H + gap);
         if (!clash) return { x, y };
       }
     }
-    return { x: 16, y: 16 };
+    return { x: 16, y: Math.max(16, ...taken.map((o) => o.y + o.h + gap)) };
   }
 
   // ---------- mutations ----------
@@ -365,7 +416,9 @@ export class Store {
       card.peopleIds = [...card.peopleIds, card.parentId];
     }
     if (!card.parentId && !card.bucketId) card.bucketId = this.defaultBucketId;
-    if (card.bucketId && input.pos === undefined) card.pos = this.freeSpot(card.bucketId);
+    // Sub-todos land on their parent's tray, so they need a spot of their own there too.
+    const tray = card.bucketId ?? effectiveBucketId(card, this.byId);
+    if (tray && input.pos === undefined) card.pos = this.freeSpot(tray);
     this.commit('add card', () => this.doc.cards.push(card));
     if (opts.select !== false) this.selectedId = card.id;
     if (opts.edit) this.editingId = card.id;

@@ -5,7 +5,6 @@
   import Icon from './Icon.svelte';
   import Meter from './Meter.svelte';
   import { dnd } from './dnd.svelte';
-  import { cardHeights } from './ui.svelte';
 
   let { bucket, filter = '' }: { bucket: Bucket; filter?: string } = $props();
 
@@ -28,10 +27,11 @@
   let bodyWidth = $state(600);
   const maxX = $derived(Math.max(0, bodyWidth - CARD_W - 8));
   $effect(() => {
+    store.trayWidths[bucket.id] = bodyWidth;
     if (isDone) store.doneTrayWidth = bodyWidth;
   });
   const yOf = (c: CardT, i: number) => (isDone ? 16 + i * DONE_STEP : c.pos.y);
-  const height = $derived(Math.max(isDone ? 110 : 150, ...cards.map((c, i) => yOf(c, i) + (cardHeights[c.id] ?? CARD_H) + 30)) + extra);
+  const height = $derived(Math.max(isDone ? 110 : 150, ...cards.map((c, i) => yOf(c, i) + (store.cardHeights[c.id] ?? CARD_H) + 30)) + extra);
   const WEEK = 7 * 86_400_000;
   const doneThisWeek = $derived(isDone ? store.doneCards.filter((c) => Date.now() - c.doneAt! < WEEK).length : 0);
 
@@ -47,7 +47,7 @@
       const x0 = Math.min(...members.map((m) => Math.min(m.pos.x, maxX)));
       const y0 = Math.min(...members.map((m) => m.pos.y));
       const x1 = Math.max(...members.map((m) => Math.min(m.pos.x, maxX) + CARD_W));
-      const y1 = Math.max(...members.map((m) => m.pos.y + (cardHeights[m.id] ?? CARD_H)));
+      const y1 = Math.max(...members.map((m) => m.pos.y + (store.cardHeights[m.id] ?? CARD_H)));
       out.push({ id, color, x: x0 - 8, y: y0 - 8, w: x1 - x0 + 16, h: y1 - y0 + 16 });
     }
     return out;
