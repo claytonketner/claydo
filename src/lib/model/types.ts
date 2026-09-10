@@ -67,6 +67,8 @@ export interface Settings {
   backupAcknowledged?: boolean;
   celebrate: boolean;
   theme: 'light' | 'dark' | 'system';
+  /** Show the yellowing/cracked/cobwebbed visual effect on old todos. */
+  agingEnabled: boolean;
 }
 
 export interface Doc {

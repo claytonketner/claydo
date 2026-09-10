@@ -22,7 +22,7 @@
   const people = $derived(card ? card.peopleIds.map((id) => store.live(id)).filter((p): p is CardT => !!p) : []);
   const mentions = $derived(card && isPerson ? store.mentionsOf(card.id) : []);
   const recentlyDone = $derived(isPerson ? doneKids.filter((k) => Date.now() - k.doneAt! < 14 * 86_400_000) : []);
-  const stale = $derived(card && card.kind === 'todo' && bucket?.kind === 'time' && card.doneAt == null ? staleStage(card.createdAt) : 0);
+  const stale = $derived(store.doc.settings.agingEnabled && card && card.kind === 'todo' && bucket?.kind === 'time' && card.doneAt == null ? staleStage(card.createdAt) : 0);
   const otherPeople = $derived(card ? store.people.filter((p) => p.id !== card.id && !card.peopleIds.includes(p.id)) : []);
   const days = $derived(card ? Math.floor((Date.now() - card.createdAt) / 86_400_000) : 0);
 

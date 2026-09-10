@@ -46,7 +46,7 @@
   const openKids = $derived(kids.filter((k) => k.doneAt == null));
   const parent = $derived(card.parentId ? store.card(card.parentId) : null);
   const bucket = $derived(store.bucketOf(card));
-  const stale = $derived(card.kind === 'todo' && !done && bucket?.kind === 'time' ? staleStage(card.createdAt) : 0);
+  const stale = $derived(store.doc.settings.agingEnabled && card.kind === 'todo' && !done && bucket?.kind === 'time' ? staleStage(card.createdAt) : 0);
   const rot = $derived(popup ? '0' : (hash01(card.id) * 3 - 1.5).toFixed(2));
   const x = $derived(Math.min(card.pos.x, Math.max(0, maxX)));
   const top = $derived(y ?? card.pos.y);

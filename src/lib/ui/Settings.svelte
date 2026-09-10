@@ -123,6 +123,10 @@
             <input type="checkbox" checked={s.celebrate} onchange={(e) => store.updateSettings({ celebrate: (e.target as HTMLInputElement).checked })} />
             <span>Celebrate when something gets done</span>
           </label>
+          <label class="row">
+            <input type="checkbox" checked={s.agingEnabled} onchange={(e) => store.updateSettings({ agingEnabled: (e.target as HTMLInputElement).checked })} />
+            <span>Age old todos (yellowing, cracks, cobwebs)</span>
+          </label>
         </section>
 
         <section>

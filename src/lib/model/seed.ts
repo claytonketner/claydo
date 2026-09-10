@@ -10,7 +10,8 @@ export const DEFAULT_SETTINGS: Settings = {
   backupVersion: 2,
   backupAcknowledged: false,
   celebrate: true,
-  theme: 'system'
+  theme: 'system',
+  agingEnabled: true
 };
 
 export function defaultBuckets(): Bucket[] {
