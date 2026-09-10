@@ -225,11 +225,11 @@
                   store.replaceDoc(seedDoc());
                   confirmDemo = false;
                   store.showToast('Loaded demo board', () => store.undo());
-                }}>Really load demo board</button
+                }}>Really reset to demo board</button
               >
               <button class="btn ghost sm" onclick={() => (confirmDemo = false)}>cancel</button>
             {:else}
-              <button class="btn" onclick={() => (confirmDemo = true)}>Load demo board…</button>
+              <button class="btn" onclick={() => (confirmDemo = true)}>Reset to demo board…</button>
             {/if}
           </div>
           <div class="row">
