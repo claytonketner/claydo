@@ -125,7 +125,7 @@
           </label>
           <label class="row">
             <input type="checkbox" checked={s.agingEnabled} onchange={(e) => store.updateSettings({ agingEnabled: (e.target as HTMLInputElement).checked })} />
-            <span>Age old todos (yellowing, cracks, cobwebs)</span>
+            <span>Age old todos (yellowing, cobwebs)</span>
           </label>
         </section>
 
