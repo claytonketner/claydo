@@ -27,7 +27,7 @@ export type Intent = 'none' | 'group' | 'nest';
  *   value:<1-3>|none     set value
  *   person:<id>|none     add / clear person
  *   tag:<tag>|none       add / clear tags
- *   matrix:<quadrant>    quick wins / big bets / fill-ins / avoid
+ *   matrix:<quadrant>    quick wins / big (life's work) / fill-ins / avoid (reconsider)
  */
 export const dnd = $state({
   draggingId: null as string | null,

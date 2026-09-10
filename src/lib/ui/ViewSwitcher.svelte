@@ -6,7 +6,7 @@
     { id: 'bucket', label: 'Timeframe', hint: 'Drag cards between trays' },
     { id: 'effort', label: 'Effort', hint: 'Group by effort; drag to resize' },
     { id: 'value', label: 'Value', hint: 'Group by value' },
-    { id: 'matrix', label: 'Value × Effort', hint: 'Quick wins, big bets, fill-ins, avoid' },
+    { id: 'matrix', label: 'Value × Effort', hint: "Quick wins, life's work, fill-ins, reconsider" },
     { id: 'person', label: 'Person', hint: 'Who each card involves' },
     { id: 'tag', label: 'Tag', hint: 'Group by tag' },
     { id: 'age', label: 'Age', hint: 'How long ago it was created' }

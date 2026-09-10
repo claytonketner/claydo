@@ -40,10 +40,10 @@
         break;
       case 'matrix': {
         const lowE = (c: CardT) => (c.effort ?? 0) <= 2;
-        const highV = (c: CardT) => (c.value ?? 0) >= 3;
+        const highV = (c: CardT) => (c.value ?? 0) >= 2;
         const sized = (c: CardT) => c.effort != null && c.value != null;
         cols.push({ key: 'quick', label: 'Quick wins', hint: 'high value · low effort', drop: 'matrix:quick', cards: by((c) => sized(c) && lowE(c) && highV(c)) });
-        cols.push({ key: 'big', label: 'Big bets', hint: 'high value · high effort', drop: 'matrix:big', cards: by((c) => sized(c) && !lowE(c) && highV(c)) });
+        cols.push({ key: 'big', label: "Life's work", hint: 'high value · high effort', drop: 'matrix:big', cards: by((c) => sized(c) && !lowE(c) && highV(c)) });
         cols.push({ key: 'fill', label: 'Fill-ins', hint: 'lower value · low effort', drop: 'matrix:fill', cards: by((c) => sized(c) && lowE(c) && !highV(c)) });
         cols.push({ key: 'avoid', label: 'Reconsider', hint: 'lower value · high effort', drop: 'matrix:avoid', cards: by((c) => sized(c) && !lowE(c) && !highV(c)) });
         cols.push({ key: 'unsized', label: 'Needs sizing', hint: 'missing effort or value', drop: null, cards: by((c) => !sized(c)) });
