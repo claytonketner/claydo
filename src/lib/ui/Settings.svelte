@@ -387,6 +387,8 @@
     padding: 6px 8px;
     border: 1.5px dashed var(--tray-line);
     border-radius: 6px;
+    flex-wrap: wrap;
+    row-gap: 4px;
   }
   .folder .help {
     white-space: nowrap;

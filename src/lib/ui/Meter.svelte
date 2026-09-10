@@ -28,7 +28,7 @@
   </span>
   <span class="label">
     {#if load.budget == null}
-      <span class="pts">{load.points}</span><span class="inf">∞</span>
+      <span class="pts">{load.points}</span>/<span class="inf">∞</span>
     {:else if level === 'over'}
       <span class="pts">over by ~{overBy}</span>
     {:else}
@@ -92,7 +92,6 @@
     color: var(--over);
   }
   .inf {
-    margin-left: 3px;
     opacity: 0.6;
   }
 </style>

@@ -14,7 +14,7 @@
   const DONE_STEP = 34;
 
   const cards = $derived.by(() => {
-    const all = isDone ? store.doneCards.filter((c) => c.kind !== 'person').slice(0, DONE_SHOWN) : store.cardsInBucket(bucket.id);
+    const all = isDone ? store.doneCards.filter((c) => c.kind !== 'person' && !c.parentId).slice(0, DONE_SHOWN) : store.cardsInBucket(bucket.id);
     if (!filter) return all;
     const q = filter.toLowerCase();
     return all.filter((c) => c.title.toLowerCase().includes(q) || c.notes.toLowerCase().includes(q) || c.tags.some((t) => t.includes(q)));
