@@ -93,7 +93,7 @@ into a column sets that attribute.
 
 **Capacity.** Each timeframe has a budget in effort points (set in ⚙ Settings).
 Unsized cards count for 2. It goes amber at 70 % and red past 100 %. Cracked
-old cards have a "Like new" button in their popup.
+old cards have a "Dust off the cobwebs" button in their popup.
 
 **Reflect ✦** in the Done strip shows what you finished this week / month /
 quarter / year, as a brick wall, a heatmap, and a copyable Markdown list.

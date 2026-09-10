@@ -157,7 +157,7 @@
           {#if bucket}<span class="badge">{bucket.name}</span>{/if}
           <span class="age" title="Created {new Date(card.createdAt).toLocaleDateString()}">{days === 0 ? 'created today' : `${days}d old`}{#if stale}, {STALE_LABELS[stale]}{/if}</span>
           {#if stale}
-            <button class="btn sm" title="Reset its age so it looks new again" onclick={() => store.refresh(card.id)}>↻ Like new</button>
+            <button class="btn sm" title="Reset its age so it looks new again" onclick={() => store.refresh(card.id)}>↻ Dust off the cobwebs</button>
           {/if}
         </div>
         <div class="row actions">
