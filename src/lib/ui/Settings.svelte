@@ -163,7 +163,7 @@
             {:else}
               <div class="row">
                 <button class="btn" onclick={() => store.chooseFolder('quick')}>Quick setup</button>
-                <span class="help">makes a <b>claydo_backups</b> folder in Documents</span>
+                <span class="help">opens Documents — just click "Open" and a <b>claydo_backups</b> folder is created there for you</span>
               </div>
               <div class="row">
                 <button class="btn" onclick={() => store.chooseFolder('pick')}>Choose a folder…</button>

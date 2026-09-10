@@ -1,6 +1,7 @@
 <script lang="ts">
   import { EFFORT_POINTS } from '../model/types';
   import { store } from '../model/store.svelte';
+  import Icon from './Icon.svelte';
 
   const DAY = 86_400_000;
   type Range = 'week' | 'month' | 'quarter' | 'year';
@@ -19,12 +20,6 @@
     }
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   });
-  const byTag = $derived.by(() => {
-    const m = new Map<string, number>();
-    for (const c of done) for (const t of c.tags) m.set(t, (m.get(t) ?? 0) + 1);
-    return [...m.entries()].sort((a, b) => b[1] - a[1]);
-  });
-
   /** Heatmap: one cell per day in range, oldest first. */
   const heat = $derived.by(() => {
     const n = days[range];
@@ -73,7 +68,7 @@
   <div class="backdrop" onclick={(e) => e.target === e.currentTarget && (store.reflectOpen = false)}>
     <div class="panel px" role="dialog" aria-label="Reflect">
       <header>
-        <h2 class="display">✦ Look back</h2>
+        <h2 class="display"><Icon name="eye" size={22} />Look back</h2>
         <div class="ranges">
           {#each ['week', 'month', 'quarter', 'year'] as const as r}
             <button class="btn sm" class:active={range === r} onclick={() => (range = r)}>{r}</button>
@@ -112,24 +107,14 @@
         {/if}
       </div>
 
-      {#if byPerson.length || byTag.length}
+      {#if byPerson.length}
         <div class="cols">
-          {#if byPerson.length}
-            <section>
-              <h3>With people</h3>
-              {#each byPerson as [name, n]}
-                <div class="bar-row"><span class="lbl">{name}</span><span class="bar" style:width="{(n / byPerson[0][1]) * 100}%"></span><span class="n">{n}</span></div>
-              {/each}
-            </section>
-          {/if}
-          {#if byTag.length}
-            <section>
-              <h3>By tag</h3>
-              {#each byTag as [tag, n]}
-                <div class="bar-row"><span class="lbl">#{tag}</span><span class="bar alt" style:width="{(n / byTag[0][1]) * 100}%"></span><span class="n">{n}</span></div>
-              {/each}
-            </section>
-          {/if}
+          <section>
+            <h3>With people</h3>
+            {#each byPerson as [name, n]}
+              <div class="bar-row"><span class="lbl">{name}</span><span class="bar" style:width="{(n / byPerson[0][1]) * 100}%"></span><span class="n">{n}</span></div>
+            {/each}
+          </section>
         </div>
       {/if}
 
@@ -167,6 +152,9 @@
     margin-bottom: 12px;
   }
   h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin: 0;
     font-size: 16px;
   }

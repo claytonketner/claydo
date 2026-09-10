@@ -38,15 +38,28 @@ export const QUICK_FOLDER_NAME = 'claydo_backups';
 
 /**
  * Let the user pick a folder. In `quick` mode the picker opens at the OS
- * Documents folder and we create a `claydo_backups` folder inside whatever
- * they confirm, so the default is one click.
+ * Documents folder and we try to create a `claydo_backups` folder inside
+ * whatever they confirm, so the default is one click. If the OS won't let us
+ * create a new folder there (some platforms only grant access to exactly
+ * what was picked), we fall back to using the picked folder itself.
  */
 export async function pickBackupFolder(mode: 'quick' | 'pick' = 'pick'): Promise<DirHandle | null> {
   const w = window as PickerWindow;
   if (!w.showDirectoryPicker) return null;
   try {
-    let handle = await w.showDirectoryPicker({ id: mode === 'quick' ? 'claydo-quick' : 'claydo-backups', mode: 'readwrite', startIn: 'documents' });
-    if (mode === 'quick' && handle.name !== QUICK_FOLDER_NAME) handle = await handle.getDirectoryHandle(QUICK_FOLDER_NAME, { create: true });
+    const picked = await w.showDirectoryPicker({ id: mode === 'quick' ? 'claydo-quick' : 'claydo-backups', mode: 'readwrite', startIn: 'documents' });
+    let handle = picked;
+    if (mode === 'quick' && picked.name !== QUICK_FOLDER_NAME) {
+      try {
+        handle = await picked.getDirectoryHandle(QUICK_FOLDER_NAME, { create: true });
+      } catch {
+        // Some OSes (e.g. macOS protecting Documents/Desktop/Downloads) only
+        // grant access to exactly what the user picked, not to items we then
+        // try to create inside it. Fall back to using that folder directly
+        // rather than failing quick setup outright.
+        handle = picked;
+      }
+    }
     await set(KEY, handle, meta);
     return handle;
   } catch (e) {

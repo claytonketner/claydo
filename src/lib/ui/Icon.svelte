@@ -1,6 +1,6 @@
 <script lang="ts">
   /** Chunky line icons that match the card outlines. */
-  let { name, size = 20 }: { name: 'undo' | 'redo' | 'trash' | 'gear' | 'reflect' | 'folder'; size?: number } = $props();
+  let { name, size = 20 }: { name: 'undo' | 'redo' | 'trash' | 'gear' | 'eye' | 'folder'; size?: number } = $props();
 </script>
 
 <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -22,8 +22,12 @@
     <circle cx="12" cy="12" r="3" />
   {:else if name === 'folder'}
     <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-  {:else if name === 'reflect'}
-    <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.5 6.5l2 2M15.5 15.5l2 2M6.5 17.5l2-2M15.5 8.5l2-2" />
+  {:else if name === 'eye'}
+    <path d="M18.5 12.714C18.5 15.081 15.366 17 11.5 17C7.634 17 4.5 15.081 4.5 12.714C4.5 10.347 7.634 8.429 11.5 8.429C15.366 8.429 18.5 10.347 18.5 12.714Z" />
+    <circle cx="11.5" cy="12.714" r="1.9" />
+    <path d="M11.5 8.5V5" />
+    <path d="M17.6 6.7 16.2 9.5" />
+    <path d="M5.4 6.7 6.8 9.5" />
   {/if}
 </svg>
 

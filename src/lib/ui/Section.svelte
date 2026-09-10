@@ -2,6 +2,7 @@
   import { store } from '../model/store.svelte';
   import { CARD_H, CARD_W, type Bucket, type Card as CardT } from '../model/types';
   import Card from './Card.svelte';
+  import Icon from './Icon.svelte';
   import Meter from './Meter.svelte';
   import { dnd } from './dnd.svelte';
   import { cardHeights } from './ui.svelte';
@@ -110,7 +111,7 @@
       <span class="count"><b>{doneThisWeek}</b> this week · {store.doneCards.length} total{#if store.doneCards.length > DONE_SHOWN} · showing {DONE_SHOWN}{/if}</span>
       <span class="spacer"></span>
       <span class="hint">drop here to finish</span>
-      <button class="btn sm" onclick={() => (store.reflectOpen = true)}>Reflect ✦</button>
+      <button class="btn sm" onclick={() => (store.reflectOpen = true)}><Icon name="eye" size={17} />Reflect</button>
     {:else}
       <span class="count">{cards.length}</span>
       {#if bucket.kind === 'time' && load}
