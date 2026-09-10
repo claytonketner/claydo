@@ -105,11 +105,11 @@ export function seedDoc(now = Date.now()): Doc {
     return card;
   };
 
-  add({ title: 'Helen', kind: 'person', bucket: 'people', pos: [16, 16], children: [
-    { title: 'Ask about the offsite agenda' }
+  add({ title: 'Alex', kind: 'person', bucket: 'people', pos: [16, 16], children: [
+    { title: 'Ask about the trip itinerary' }
   ] });
-  add({ title: 'Dan', kind: 'person', bucket: 'people', pos: [190, 16] });
-  add({ title: 'Jill', kind: 'person', bucket: 'people', pos: [40, 150] });
+  add({ title: 'Sam', kind: 'person', bucket: 'people', pos: [190, 16] });
+  add({ title: 'Jordan', kind: 'person', bucket: 'people', pos: [40, 150] });
 
   add({
     title: 'Welcome to Claydo',
@@ -120,29 +120,29 @@ export function seedDoc(now = Date.now()): Doc {
     tags: ['meta'],
     notes: 'Drag me around. Click my title to edit. Press N to add a card.\n- Try dropping a card onto another to nest it\n- Press F on a card with children to focus it',
     children: [
-      { title: 'Try the quick-add bar', notes: 'Type: "Call vendor @helen #purchasing !s *3 >today"' },
+      { title: 'Try the quick-add bar', notes: 'Type: "Call the plumber @sam #home !s *3 >today"' },
       { title: 'Switch views with the buttons up top' },
       { title: 'Give a sub-todo its own timeframe', bucket: 'week' }
     ]
   });
-  add({ title: 'Check new oracle report', bucket: 'today', pos: [190, 16], effort: 1, ageDays: 1 });
-  add({ title: 'Sample efficiency sheet', bucket: 'today', pos: [190, 130], effort: 3, value: 2, ageDays: 3 });
+  add({ title: 'Reply to Sam\'s email', bucket: 'today', pos: [190, 16], effort: 1, ageDays: 1 });
+  add({ title: 'Update the budget spreadsheet', bucket: 'today', pos: [190, 130], effort: 3, value: 2, ageDays: 3 });
 
-  add({ title: 'Present purchase tracker to Lisa + Dennis', pos: [16, 16], effort: 3, value: 3, tags: ['purchasing'], people: ['Helen'], ageDays: 2 });
-  add({ title: 'Prepare for conference', pos: [16, 150], effort: 4, ageDays: 9 });
-  add({ title: 'Make presentation on how AI works under the hood', pos: [190, 150], effort: 4, value: 2, ageDays: 16 });
+  add({ title: 'Present quarterly report to the team', pos: [16, 16], effort: 3, value: 3, tags: ['work'], people: ['Alex'], ageDays: 2 });
+  add({ title: 'Plan the weekend trip', pos: [16, 150], effort: 4, ageDays: 9 });
+  add({ title: 'Write blog post draft', pos: [190, 150], effort: 4, value: 2, ageDays: 16 });
 
-  add({ title: 'Schedule next light table', bucket: 'soon', pos: [16, 16], effort: 2, ageDays: 20 });
-  add({ title: 'Purchasing process automations', bucket: 'soon', pos: [190, 16], effort: 5, value: 3, tags: ['purchasing', 'automation'], ageDays: 33 });
+  add({ title: 'Schedule dentist appointment', bucket: 'soon', pos: [16, 16], effort: 2, ageDays: 20 });
+  add({ title: 'Research a new laptop', bucket: 'soon', pos: [190, 16], effort: 5, value: 3, tags: ['shopping'], ageDays: 33 });
 
-  add({ title: 'NAT testing', bucket: 'else', pos: [16, 16], ageDays: 40 });
-  add({ title: 'Process map scraper', bucket: 'else', pos: [190, 16], effort: 4, ageDays: 45, tags: ['automation'] });
+  add({ title: 'Clean out the garage', bucket: 'else', pos: [16, 16], ageDays: 40 });
+  add({ title: 'Organize the photo library', bucket: 'else', pos: [190, 16], effort: 4, ageDays: 45, tags: ['home'] });
 
-  add({ title: 'Conveyor config as YAML templates', kind: 'idea', bucket: 'ideas', pos: [16, 16], notes: 'Each process defined in yaml; talk about where the complexity in gos templates currently lives.' });
+  add({ title: 'A simpler way to track habits', kind: 'idea', bucket: 'ideas', pos: [16, 16], notes: 'Sketch out a lightweight weekly view instead of daily checkboxes.' });
 
-  add({ title: 'Oracle report layouts', bucket: 'today', done: 1, effort: 2 });
-  add({ title: 'Firefly training scheduling', bucket: 'week', done: 3, effort: 3, value: 2 });
-  add({ title: 'Send out decision from GA+AP meeting', bucket: 'week', done: 6, effort: 1 });
+  add({ title: 'Book the venue', bucket: 'today', done: 1, effort: 2 });
+  add({ title: 'Renew car registration', bucket: 'week', done: 3, effort: 3, value: 2 });
+  add({ title: 'Send meeting notes to the team', bucket: 'week', done: 6, effort: 1 });
 
   return doc;
 }

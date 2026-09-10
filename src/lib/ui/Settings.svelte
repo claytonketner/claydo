@@ -11,6 +11,8 @@
   let fileInput = $state<HTMLInputElement | null>(null);
   let newBucket = $state('');
   let confirmClear = $state(false);
+  let confirmDemo = $state(false);
+  let confirmRestoreKey = $state<string | null>(null);
   let showFiles = $state(false);
   let files = $state<BackupFileInfo[]>([]);
 
@@ -42,6 +44,7 @@
     const doc = await loadSnapshot(key);
     if (!doc) return;
     store.replaceDoc(doc);
+    confirmRestoreKey = null;
     store.showToast(`Restored snapshot ${key}`, () => store.undo());
   }
   function close() {
@@ -198,13 +201,34 @@
               <span class="mono">{snap.key}</span>
               <span class="help">{snap.cardCount} cards</span>
               <span class="spacer"></span>
-              <button class="btn ghost sm" onclick={() => restore(snap.key)}>restore</button>
+              {#if confirmRestoreKey === snap.key}
+                <span class="help">this replaces your current board</span>
+                <button class="btn danger sm" onclick={() => restore(snap.key)}>Really restore</button>
+                <button class="btn ghost sm" onclick={() => (confirmRestoreKey = null)}>cancel</button>
+              {:else}
+                <button class="btn ghost sm" onclick={() => (confirmRestoreKey = snap.key)}>restore</button>
+              {/if}
             </div>
           {/each}
 
           <h3>Danger zone</h3>
           <div class="row">
-            <button class="btn" onclick={() => store.replaceDoc(seedDoc())}>Load demo board</button>
+            {#if confirmDemo}
+              <span class="help">this replaces your current board</span>
+              <button
+                class="btn danger"
+                onclick={() => {
+                  store.replaceDoc(seedDoc());
+                  confirmDemo = false;
+                  store.showToast('Loaded demo board', () => store.undo());
+                }}>Really load demo board</button
+              >
+              <button class="btn ghost sm" onclick={() => (confirmDemo = false)}>cancel</button>
+            {:else}
+              <button class="btn" onclick={() => (confirmDemo = true)}>Load demo board…</button>
+            {/if}
+          </div>
+          <div class="row">
             {#if confirmClear}
               <button
                 class="btn danger"
