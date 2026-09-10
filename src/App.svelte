@@ -114,7 +114,7 @@
         store.requestComplete(sel.id);
         return;
       }
-      if (k === 'f' || k === 'F') {
+      if (k === ' ') {
         e.preventDefault();
         store.focus(sel.id);
         return;

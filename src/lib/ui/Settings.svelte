@@ -258,7 +258,7 @@
           <span><span class="kbd">N</span> new todo</span>
           <span><span class="kbd">⏎</span> edit selected</span>
           <span><span class="kbd">D</span> done</span>
-          <span><span class="kbd">F</span> focus sub-todos</span>
+          <span><span class="kbd">Space</span> focus sub-todos</span>
           <span><span class="kbd">1–5</span> effort</span>
           <span><span class="kbd">⇧1–3</span> value</span>
           <span><span class="kbd">←</span><span class="kbd">→</span> move timeframe</span>
