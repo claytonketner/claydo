@@ -1,5 +1,6 @@
 <script lang="ts">
   import { effectivePoints } from '../model/capacity';
+  import { matchesTerms, searchTerms } from '../model/search';
   import { AGE_GROUPS, ageGroupKey } from '../model/staleness';
   import { store } from '../model/store.svelte';
   import { EFFORT_LABELS, VALUE_LABELS, type Card as CardT, type ViewMode } from '../model/types';
@@ -17,13 +18,8 @@
   }
 
   const pool = $derived.by(() => {
-    const q = store.search.toLowerCase();
-    return store.openCards.filter(
-      (c) =>
-        c.kind !== 'person' &&
-        c.bucketId != null &&
-        (!q || c.title.toLowerCase().includes(q) || c.notes.toLowerCase().includes(q) || c.tags.some((t) => t.includes(q)))
-    );
+    const terms = searchTerms(store.search);
+    return store.openCards.filter((c) => c.kind !== 'person' && c.bucketId != null && matchesTerms(c, terms));
   });
 
   const columns = $derived.by((): Column[] => {

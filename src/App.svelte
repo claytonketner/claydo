@@ -18,6 +18,7 @@
   import { focusQuickAdd, focusSearch, isTypingTarget, registerSearch } from './lib/ui/ui.svelte';
 
   let searchEl = $state<HTMLInputElement | null>(null);
+  let searchFocused = $state(false);
 
   onMount(() => {
     void store.init();
@@ -172,7 +173,7 @@
         <span class="logo">▣</span> claydo
       </div>
       <QuickAdd />
-      <div class="search px" class:has={!!store.search}>
+      <div class="search px" class:has={!!store.search} class:focused={searchFocused}>
         <span class="mag">⌕</span>
         <input
           bind:this={searchEl}
@@ -185,9 +186,18 @@
             }
             e.stopPropagation();
           }}
+          onfocus={() => (searchFocused = true)}
+          onblur={() => (searchFocused = false)}
           aria-label="Filter cards"
         />
         {#if store.search}<button class="clear" onclick={() => (store.search = '')}>✕</button>{:else}<span class="kbd">/</span>{/if}
+        {#if searchFocused}
+          <div class="hint">
+            <span><b>one two</b> matches either word</span><span><b>"one two"</b> matches the phrase</span>
+            <span><b>esc</b> clears the search</span
+            >
+          </div>
+        {/if}
       </div>
       <div class="history">
         <button class="btn icon" disabled={!store.canUndo} title="Undo (⌘Z)" onclick={() => store.undo()}><Icon name="undo" /></button>
@@ -258,6 +268,7 @@
     font-size: 18px;
   }
   .search {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -265,9 +276,37 @@
     background: var(--field);
     color: var(--field-ink);
     width: 190px;
+    transition: box-shadow 120ms var(--ease-out);
   }
   .search.has {
     border-color: var(--accent-2);
+  }
+  .search.focused {
+    box-shadow: 4px 4px 0 var(--accent);
+    border-color: var(--accent);
+  }
+  .hint {
+    position: absolute;
+    right: -2px;
+    top: calc(100% + 6px);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: max-content;
+    max-width: 260px;
+    padding: 6px 10px;
+    border: var(--border) solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper);
+    box-shadow: 3px 3px 0 var(--shadow);
+    font-size: 11px;
+    color: #4b4232;
+    z-index: 30;
+    animation: pop-in 140ms var(--ease-out);
+  }
+  .hint b {
+    color: var(--accent);
+    font-family: var(--font-mono);
   }
   .search input {
     flex: 1;
