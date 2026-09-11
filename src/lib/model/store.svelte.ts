@@ -510,6 +510,11 @@ export class Store {
       }
       child.touchedAt = child.updatedAt = Date.now();
       parent.touchedAt = Date.now();
+      // The child still shows on whatever tray it now inherits, so give it a clear spot
+      // there rather than leaving it sitting on top of the card it was dropped on. A
+      // person's agenda items never reach the board, so they keep the position they had.
+      const tray = effectiveBucketId(child, this.byId);
+      if (tray && this.doc.buckets.find((b) => b.id === tray)?.kind !== 'people') child.pos = this.freeSpot(tray, childId);
     });
     return true;
   }

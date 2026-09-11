@@ -1,11 +1,16 @@
 import { CARD_H, CARD_W } from '../model/types';
 import { store } from '../model/store.svelte';
-import { elementUnder, overlapRatio, type Rect } from '../physics/drag';
+import { elementUnder, type Rect } from '../physics/drag';
 
 /** Cards this close (px gap, or overlapping) "stick" together as a group. */
 export const GROUP_GAP = 22;
-/** Overlap (fraction of the dragged card) at which dropping nests instead. */
-export const NEST_T = 0.55;
+/**
+ * How close (px) the pointer has to get to a card's centre for a drop to nest.
+ * Deliberately a fixed distance rather than an overlap fraction: card sizes vary
+ * a lot, and a big card should be just as easy to drop onto a small one as the
+ * other way round.
+ */
+export const NEST_R = 58;
 /** Breathing room the relayout keeps between cards that aren't grouped. */
 const SPACING = 12;
 
@@ -35,9 +40,9 @@ export const dnd = $state({
   draggingClusterId: null as string | null,
   /** A group is possible here but ⇧ isn't held. */
   groupHint: false,
-  /** Nearest overlapping card and how much of the dragged card it covers. */
+  /** Nearest card and how close the pointer is to its centre (0..1, 1 = dead centre). */
   overCardId: null as string | null,
-  overlap: 0,
+  nestProgress: 0,
   intent: 'none' as Intent,
   overDropKey: null as string | null,
   /** Client rects for the overlay hull + label. */
@@ -76,7 +81,7 @@ export function beginDrag(cardId: string, node: HTMLElement, opts: { alone?: boo
     }
   }
   dnd.overCardId = null;
-  dnd.overlap = 0;
+  dnd.nestProgress = 0;
   dnd.intent = 'none';
   dnd.overDropKey = null;
   dnd.dragRect = null;
@@ -98,8 +103,16 @@ export function trackDrag(e: PointerEvent, node: HTMLElement) {
     for (const f of followers) f.el.style.transform = `translate(${dx}px, ${dy}px)`;
   }
 
-  // Closest card: most overlap first, otherwise the smallest edge gap.
-  let best: { id: string; ratio: number; gap: number; rect: Rect } | null = null;
+  // Candidates: cards the pointer is aiming at (within the nest radius of their
+  // centre), or cards sitting close enough alongside to group with.
+  interface Candidate {
+    id: string;
+    /** Pointer distance to the card's centre. */
+    dist: number;
+    gap: number;
+    rect: Rect;
+  }
+  const candidates: Candidate[] = [];
   const dragged = dnd.draggingId;
   for (const el of document.querySelectorAll<HTMLElement>('[data-card]')) {
     if (el === node || node.contains(el) || el.contains(node)) continue;
@@ -109,24 +122,34 @@ export function trackDrag(e: PointerEvent, node: HTMLElement) {
     if (!id || id === dragged) continue;
     if (followers.some((f) => f.id === id)) continue;
     const r = rectOf(el);
-    const ratio = overlapRatio(me, r);
+    const dist = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
     const gap = gapBetween(me, r);
-    if (gap > GROUP_GAP) continue;
-    if (!best || ratio > best.ratio || (ratio === best.ratio && gap < best.gap)) best = { id, ratio, gap, rect: r };
+    if (dist > NEST_R && gap > GROUP_GAP) continue;
+    candidates.push({ id, dist, gap, rect: r });
   }
+  // A card the pointer is inside the nest radius of wins over any merely adjacent
+  // one; ties on either side go to whichever centre the pointer is nearest.
+  candidates.sort((a, b) => {
+    const aIn = a.dist <= NEST_R;
+    const bIn = b.dist <= NEST_R;
+    if (aIn !== bIn) return aIn ? -1 : 1;
+    if (!aIn && a.gap !== b.gap) return a.gap - b.gap;
+    return a.dist - b.dist;
+  });
+  const best = candidates[0] ?? null;
 
   const can = best && dragged ? capabilities(dragged, best.id) : null;
   let intent: Intent = 'none';
   let hint = false;
   if (best && can && !e.altKey) {
     const targetIsPerson = store.card(best.id)?.kind === 'person';
-    if (can.nest && (best.ratio >= NEST_T || targetIsPerson)) intent = 'nest';
-    else if (can.group && e.shiftKey) intent = 'group';
-    else if (can.group) hint = true;
+    if (can.nest && (best.dist <= NEST_R || targetIsPerson)) intent = 'nest';
+    else if (can.group && best.gap <= GROUP_GAP && e.shiftKey) intent = 'group';
+    else if (can.group && best.gap <= GROUP_GAP) hint = true;
   }
   dnd.groupHint = hint;
   dnd.overCardId = intent === 'none' && !hint ? null : best!.id;
-  dnd.overlap = best ? best.ratio : 0;
+  dnd.nestProgress = best ? Math.max(0, Math.min(1, 1 - best.dist / NEST_R)) : 0;
   dnd.targetRect = intent === 'none' && !hint ? null : best!.rect;
   dnd.intent = intent;
 
@@ -144,7 +167,7 @@ export function endDrag() {
   dnd.groupHint = false;
   dnd.draggingId = null;
   dnd.overCardId = null;
-  dnd.overlap = 0;
+  dnd.nestProgress = 0;
   dnd.intent = 'none';
   dnd.overDropKey = null;
   dnd.dragRect = null;

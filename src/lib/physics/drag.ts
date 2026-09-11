@@ -169,11 +169,3 @@ export interface Rect {
   width: number;
   height: number;
 }
-
-/** Fraction of `a`'s area covered by `b`. */
-export function overlapRatio(a: Rect, b: Rect): number {
-  const w = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
-  const h = Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
-  if (w <= 0 || h <= 0) return 0;
-  return (w * h) / Math.max(1, a.width * a.height);
-}
