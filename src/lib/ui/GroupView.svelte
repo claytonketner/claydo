@@ -69,17 +69,21 @@
 
   const points = (cards: CardT[]) => cards.reduce((s, c) => s + (c.kind === 'todo' ? effectivePoints(c, store.capIdx) : 0), 0);
 
+  /** Room a column opens up below its cards while a drag hovers over it, as the trays do. */
+  const HOVER_ROOM = 170;
+  const FLOW_PAD = 14;
+  const hovering = (col: Column) => col.drop != null && dnd.overDropKey === col.drop && dnd.draggingId != null;
 </script>
 
 <div class="group-view" class:matrix={view === 'matrix'}>
   {#each columns as col (col.key)}
-    <section class="col" class:over={col.drop != null && dnd.overDropKey === col.drop && dnd.intent === 'none'} class:nodrop={col.drop == null}>
+    <section class="col" class:over={hovering(col) && dnd.intent === 'none'} class:nodrop={col.drop == null}>
       <header>
         <h2 class="display">{col.label}</h2>
         {#if col.hint}<span class="hint">{col.hint}</span>{/if}
         <span class="count">{col.cards.length} · {points(col.cards)} pts</span>
       </header>
-      <div class="flow" data-drop={col.drop ?? undefined}>
+      <div class="flow" data-drop={col.drop ?? undefined} style:padding-bottom="{FLOW_PAD + (hovering(col) ? HOVER_ROOM : 0)}px">
         {#each col.cards as card (card.id)}
           <Card {card} layout="flow" dropKey={col.drop} />
         {/each}
@@ -148,8 +152,10 @@
     position: relative;
     display: flex;
     flex-wrap: wrap;
+    align-content: flex-start;
     gap: 14px;
     padding: 14px;
     min-height: 120px;
+    transition: padding-bottom 200ms var(--ease-out);
   }
 </style>
