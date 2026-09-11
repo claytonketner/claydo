@@ -5,12 +5,20 @@ import { elementUnder, type Rect } from '../physics/drag';
 /** Cards this close (px gap, or overlapping) "stick" together as a group. */
 export const GROUP_GAP = 22;
 /**
- * How close (px) the pointer has to get to a card's centre for a drop to nest.
- * Deliberately a fixed distance rather than an overlap fraction: card sizes vary
- * a lot, and a big card should be just as easy to drop onto a small one as the
- * other way round.
+ * Nesting is accepted only while the pointer is inside a small square at the target's
+ * centre: this is its ideal side in px. A square rather than an overlap fraction so a
+ * big card is as easy to drop onto a small one as the other way round, and small so
+ * there's a wide margin all round where you can park a card against a neighbour
+ * (even partly on top of it) without nesting by accident.
  */
-export const NEST_R = 58;
+export const NEST_HIT = 44;
+/** ...but the square never eats more than this fraction of the target's own width or height. */
+const NEST_HIT_MAX = 0.4;
+
+/** Half-width of the nest hit square at the centre of `r`. */
+function nestReach(r: Rect): number {
+  return Math.max(9, Math.min(NEST_HIT, r.width * NEST_HIT_MAX, r.height * NEST_HIT_MAX) / 2);
+}
 /** Breathing room the relayout keeps between cards that aren't grouped. */
 const SPACING = 12;
 
@@ -103,12 +111,12 @@ export function trackDrag(e: PointerEvent, node: HTMLElement) {
     for (const f of followers) f.el.style.transform = `translate(${dx}px, ${dy}px)`;
   }
 
-  // Candidates: cards the pointer is aiming at (within the nest radius of their
-  // centre), or cards sitting close enough alongside to group with.
+  // Candidates: cards whose centre square the pointer is in or approaching, plus
+  // cards sitting close enough alongside to group with.
   interface Candidate {
     id: string;
-    /** Pointer distance to the card's centre. */
-    dist: number;
+    /** Pointer offset from the card's centre, as a multiple of the hit square (<= 1 is a nest). */
+    reach: number;
     gap: number;
     rect: Rect;
   }
@@ -122,19 +130,20 @@ export function trackDrag(e: PointerEvent, node: HTMLElement) {
     if (!id || id === dragged) continue;
     if (followers.some((f) => f.id === id)) continue;
     const r = rectOf(el);
-    const dist = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+    const off = Math.max(Math.abs(e.clientX - (r.left + r.width / 2)), Math.abs(e.clientY - (r.top + r.height / 2)));
+    const reach = off / nestReach(r);
     const gap = gapBetween(me, r);
-    if (dist > NEST_R && gap > GROUP_GAP) continue;
-    candidates.push({ id, dist, gap, rect: r });
+    if (reach > 1 && gap > GROUP_GAP) continue;
+    candidates.push({ id, reach, gap, rect: r });
   }
-  // A card the pointer is inside the nest radius of wins over any merely adjacent
-  // one; ties on either side go to whichever centre the pointer is nearest.
+  // A card whose hit square the pointer is in wins over any merely adjacent one;
+  // ties on either side go to whichever centre the pointer is nearest.
   candidates.sort((a, b) => {
-    const aIn = a.dist <= NEST_R;
-    const bIn = b.dist <= NEST_R;
+    const aIn = a.reach <= 1;
+    const bIn = b.reach <= 1;
     if (aIn !== bIn) return aIn ? -1 : 1;
     if (!aIn && a.gap !== b.gap) return a.gap - b.gap;
-    return a.dist - b.dist;
+    return a.reach - b.reach;
   });
   const best = candidates[0] ?? null;
 
@@ -143,13 +152,14 @@ export function trackDrag(e: PointerEvent, node: HTMLElement) {
   let hint = false;
   if (best && can && !e.altKey) {
     const targetIsPerson = store.card(best.id)?.kind === 'person';
-    if (can.nest && (best.dist <= NEST_R || targetIsPerson)) intent = 'nest';
+    if (can.nest && (best.reach <= 1 || targetIsPerson)) intent = 'nest';
     else if (can.group && best.gap <= GROUP_GAP && e.shiftKey) intent = 'group';
     else if (can.group && best.gap <= GROUP_GAP) hint = true;
   }
   dnd.groupHint = hint;
   dnd.overCardId = intent === 'none' && !hint ? null : best!.id;
-  dnd.nestProgress = best ? Math.max(0, Math.min(1, 1 - best.dist / NEST_R)) : 0;
+  // Full once inside the square, fading out over a square twice its size.
+  dnd.nestProgress = best ? Math.max(0, Math.min(1, 2 - best.reach)) : 0;
   dnd.targetRect = intent === 'none' && !hint ? null : best!.rect;
   dnd.intent = intent;
 
